@@ -1,4 +1,10 @@
-streamlit
+streamlit>=1.36.0
 pandas
 plotly
-RandomForestRegressor
+scikit-learn
+statsmodels
+numpy
+requests
+thefuzz
+openpyxl
+pypdf
