@@ -3,328 +3,350 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import numpy as np
-import os
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 # --------------------------------------------------------------------------
-# 1. PAGE CONFIGURATION & STYLING (Professional Mode)
+# 1. PAGE CONFIGURATION & STYLING
 # --------------------------------------------------------------------------
 st.set_page_config(
-    page_title="Asepeyo Net Zero Strategy",
+    page_title="Plan Net Zero | Asepeyo",
+    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS for Professional Presentation
+# Custom CSS for Corporate Identity (Asepeyo Blue & Clean Layout)
 st.markdown("""
     <style>
-    .block-container {padding-top: 2rem; padding-bottom: 2rem;}
-    h1 {font-family: 'Helvetica', sans-serif; color: #003366; font-size: 3rem;}
-    h2 {font-family: 'Helvetica', sans-serif; color: #005599; font-size: 2.2rem; border-bottom: 2px solid #ddd; padding-bottom: 10px;}
-    h3 {font-family: 'Helvetica', sans-serif; color: #444; font-size: 1.5rem;}
-    .metric-box {border: 1px solid #e0e0e0; padding: 20px; border-radius: 5px; background-color: #f9f9f9; text-align: center;}
-    .metric-val {font-size: 2rem; font-weight: bold; color: #003366;}
-    .metric-lbl {font-size: 1rem; color: #666;}
+    /* Main Layout */
+    .main {background-color: #f8f9fa;}
+    .block-container {padding-top: 1rem; padding-bottom: 3rem;}
+    
+    /* Typography */
+    h1 {color: #003366; font-family: 'Helvetica', sans-serif; font-weight: 700;}
+    h2 {color: #004d99; font-family: 'Helvetica', sans-serif; border-bottom: 2px solid #003366; padding-bottom: 10px;}
+    h3 {color: #444; font-size: 1.4rem;}
+    
+    /* Metric Cards */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border: 1px solid #e0e0e0;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        text-align: center;
+    }
+    div[data-testid="stMetricLabel"] {color: #666; font-size: 0.9rem;}
+    div[data-testid="stMetricValue"] {color: #003366; font-weight: bold; font-size: 1.8rem;}
+    
+    /* Custom Alert/Info Box */
+    .insight-box {
+        background-color: #e8f4f8;
+        border-left: 5px solid #003366;
+        padding: 15px;
+        border-radius: 5px;
+        color: #003366;
+        margin-bottom: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------------------------------
-# 2. DATA LOADERS (Robust)
+# 2. DATA GENERATION ENGINE (Mimicking PDF Data)
 # --------------------------------------------------------------------------
 @st.cache_data
-def load_billing_data():
-    """Loads and cleans the 2025 Billing Data."""
-    try:
-        # Search for file in data folder
-        data_dir = "data"
-        files = [f for f in os.listdir(data_dir) if "Factura" in f]
-        if not files: return pd.DataFrame()
-        
-        file_path = os.path.join(data_dir, files[0])
-        df = pd.read_csv(file_path, sep=None, engine='python')
-        
-        # Clean numeric columns (handle European formats)
-        cols_to_clean = [c for c in df.columns if "Consumo" in c or "Importe" in c or "Base" in c]
-        for col in cols_to_clean:
-            if df[col].dtype == object:
-                df[col] = (df[col].astype(str)
-                           .str.replace('.', '', regex=False)
-                           .str.replace(',', '.', regex=False))
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-        
-        # Standardize columns
-        df.rename(columns=lambda x: x.strip(), inplace=True)
-        return df
-    except Exception as e:
-        return pd.DataFrame()
+def get_pdf_data():
+    """Generates static data frames matching the PDF content."""
+    
+    # 1. Top Consumers (Page 4 of PDF)
+    centers = {
+        'Chamartín': 2500000,
+        'Hospital Sevilla': 1900000,
+        'Hospital Coslada': 1850000,
+        'Sant Cugat': 900000,
+        'Vía Augusta 36': 450000,
+        'Girona': 380000,
+        'Cartuja': 350000,
+        'Valencia Cid': 320000
+    }
+    df_centers = pd.DataFrame(list(centers.items()), columns=['Center', 'kWh'])
+    
+    # 2. Investment Measures (Page 10/12)
+    measures = [
+        {'Measure': 'Solar Panels', 'Savings_EUR': 180376, 'Inv_EUR': 650000, 'Type': 'Generation'},
+        {'Measure': 'Energy Mgmt System', 'Savings_EUR': 75190, 'Inv_EUR': 150000, 'Type': 'Control'},
+        {'Measure': 'LED Retrofit', 'Savings_EUR': 68551, 'Inv_EUR': 84415, 'Type': 'Efficiency'},
+        {'Measure': 'Setpoint Adjustment', 'Savings_EUR': 55974, 'Inv_EUR': 0, 'Type': 'Optimization'},
+        {'Measure': 'Air Curtains', 'Savings_EUR': 36873, 'Inv_EUR': 45000, 'Type': 'Efficiency'},
+        {'Measure': 'Phantom Load Kill', 'Savings_EUR': 34873, 'Inv_EUR': 2572, 'Type': 'Optimization'}
+    ]
+    df_measures = pd.DataFrame(measures)
+    df_measures['ROI_Years'] = df_measures['Inv_EUR'] / df_measures['Savings_EUR']
+    
+    return df_centers, df_measures
 
-@st.cache_data
-def load_hourly_data():
-    """Loads the hourly data (Via Augusta 36)."""
-    try:
-        data_dir = "data"
-        
-        # 1. SEARCH: Look for the specific file you uploaded
-        target_files = [f for f in os.listdir(data_dir) if "Distribución" in f or "Lecturas" in f]
-        
-        if not target_files:
-            # Fallback: Look for any CSV that might be the hourly one
-            target_files = [f for f in os.listdir(data_dir) if f.endswith(".csv") and "horaria" in f.lower()]
-            
-        if not target_files: 
-            return pd.DataFrame()
-        
-        # Use the first match found
-        file_path = os.path.join(data_dir, target_files[0])
-        
-        # 2. LOAD: Use the robust loading logic
-        df = pd.read_csv(file_path, sep=None, engine='python', on_bad_lines='skip')
-        
-        # 3. CLEAN: Standardize columns
-        df.rename(columns=lambda x: x.strip(), inplace=True)
-        
-        # Map your specific columns (based on your file structure)
-        col_mapping = {
-            'Fecha y hora': 'fecha', 
-            'Fecha': 'fecha', 
-            'Energía activa': 'kwh', 
-            'Energía activa (kWh)': 'kwh'
-        }
-        df.rename(columns=col_mapping, inplace=True)
-        
-        # Clean numeric data (handle "309" or "309,00")
-        if 'kwh' in df.columns:
-            if df['kwh'].dtype == object:
-                df['kwh'] = (df['kwh'].astype(str)
-                             .str.replace('"', '', regex=False)
-                             .str.replace('.', '', regex=False) # Remove thousands dot
-                             .str.replace(',', '.', regex=False)) # Comma to dot
-            df['kwh'] = pd.to_numeric(df['kwh'], errors='coerce')
-            
-        # Clean Dates
-        df['fecha'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
-        df.dropna(subset=['fecha', 'kwh'], inplace=True)
-        
-        return df
-
-    except Exception as e:
-        # st.error(f"Debug Error: {e}") # Uncomment to see specific error details on screen
-        return pd.DataFrame()
-
-# --------------------------------------------------------------------------
-# 3. HELPER: AI FORECASTING (Random Forest)
-# --------------------------------------------------------------------------
-def run_forecast(df):
-    """Generates a forecast using Random Forest."""
-    df['day_of_year'] = df['fecha'].dt.dayofyear
-    df['hour'] = df['fecha'].dt.hour
-    df['day_of_week'] = df['fecha'].dt.dayofweek
+def generate_dynamic_curve(base_kw, hvac_kw, light_kw, 
+                          opt_base_pct, opt_hvac_pct, opt_light_pct):
+    """
+    Generates a 24h curve.
+    Inputs are Base Load, HVAC Peak, Lighting Peak.
+    Optimization sliders (0-100%) reduce these loads.
+    """
+    hours = np.arange(24)
     
-    # Train/Test
-    X = df[['day_of_year', 'hour', 'day_of_week']]
-    y = df['kwh']
+    # --- 1. BASELINE SHAPES ---
+    # Base: Constant 24h
+    curve_base = np.full(24, base_kw)
     
-    model = RandomForestRegressor(n_estimators=50, random_state=42)
-    model.fit(X, y)
+    # HVAC: Bell curve from 8am to 8pm
+    curve_hvac = hvac_kw * np.exp(- (hours - 14)**2 / (2 * 2.5**2))
+    curve_hvac = np.where(curve_hvac < 0.1, 0, curve_hvac) # Cutoff
     
-    # Create Future Dataframe (Next 7 days)
-    last_date = df['fecha'].max()
-    future_dates = [last_date + timedelta(hours=i) for i in range(1, 168 + 1)] # 7 days
-    future_df = pd.DataFrame({'fecha': future_dates})
-    future_df['day_of_year'] = future_df['fecha'].dt.dayofyear
-    future_df['hour'] = future_df['fecha'].dt.hour
-    future_df['day_of_week'] = future_df['fecha'].dt.dayofweek
+    # Lighting: Plateau from 7am to 9pm
+    curve_light = np.zeros(24)
+    mask_light = (hours >= 7) & (hours <= 21)
+    curve_light[mask_light] = light_kw
     
-    future_df['predicted_kwh'] = model.predict(future_df[['day_of_year', 'hour', 'day_of_week']])
-    return future_df
+    total_original = curve_base + curve_hvac + curve_light
+    
+    # --- 2. OPTIMIZATION LOGIC ---
+    # Base reduction (Phantom loads)
+    curve_base_opt = curve_base * (1 - opt_base_pct/100)
+    
+    # HVAC reduction (Setpoint adjustment + VFD)
+    curve_hvac_opt = curve_hvac * (1 - opt_hvac_pct/100)
+    
+    # Lighting reduction (LED + Sensors)
+    curve_light_opt = curve_light * (1 - opt_light_pct/100)
+    
+    total_optimized = curve_base_opt + curve_hvac_opt + curve_light_opt
+    
+    # DataFrame for plotting
+    df = pd.DataFrame({
+        'Hour': hours,
+        'Original': total_original,
+        'Optimized': total_optimized,
+        'Base': curve_base_opt,
+        'HVAC': curve_hvac_opt,
+        'Lighting': curve_light_opt
+    })
+    
+    return df, total_original.sum(), total_optimized.sum()
 
 # --------------------------------------------------------------------------
-# 4. MAIN APP LOGIC
+# 3. MAIN APPLICATION
 # --------------------------------------------------------------------------
 def main():
-    # --- NAVIGATION (Simple Tabs for Presentation Flow) ---
-    tabs = st.tabs(["1. Vision & Strategy", "2. Deep Dive: Via Augusta 36", "3. The Path to Net Zero"])
+    # Load Data
+    df_centers, df_measures = get_pdf_data()
+    
+    # Header Section
+    c1, c2 = st.columns([3, 1])
+    with c1:
+        st.title("PLAN NET ZERO O.")
+        st.caption("Strategic Energy Efficiency & Decarbonization Roadmap")
+    with c2:
+        # Placeholder for Logo
+        st.markdown("<h3 style='text-align: right; color: #003366;'>ASEPEYO</h3>", unsafe_allow_html=True)
+
+    # Tabs for Narrative Structure
+    tab1, tab2, tab3 = st.tabs(["1. The Imperative (Strategy)", "2. The Engine (Real-time Opt)", "3. The Roadmap (Investment)"])
 
     # ==============================================================================
-    # SLIDE 1: INTRODUCTION & CONTEXT (Carnot Engine)
+    # TAB 1: STRATEGY & DIAGNOSIS
     # ==============================================================================
-    with tabs[0]:
-        st.title("Strategic Energy Plan: Net Zero")
-        st.markdown("### The Efficiency Engine")
+    with tab1:
+        st.markdown("## 1. The Financial Imperative")
         
-        col_text, col_visual = st.columns([1, 1])
+        # Key Metrics Row (From PDF Page 3)
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("Historical Savings Lost", "€ 1.1 M", delta="- Inaction Cost", delta_color="inverse")
+        col_m2.metric("Target Annual Savings", "€ 650 k", delta="+ Potential Cashflow")
+        col_m3.metric("Top 5 Centers", "70%", "of Total Consumption")
+        
+        st.divider()
+        
+        col_text, col_chart = st.columns([1, 2])
         
         with col_text:
             st.markdown("""
-            **The Challenge:**
-            Inaction has historically cost over **€1.1 Million** in lost savings. 
-            To reverse this, we apply the **Carnot Principle** to our energy strategy: maximizing the efficiency of every Euro invested.
+            <div class="insight-box">
+            <b>The Carnot Principle:</b><br>
+            We approach energy not as a fixed cost, but as a thermodynamic engine. 
+            Our goal is to maximize the work (utility) extracted from every Euro invested.
+            </div>
+            """, unsafe_allow_html=True)
             
-            **Our 3-Phase Approach:**
-            1.  **Measurement & Control:** Real-time visibility (Digital Twin).
-            2.  **Optimization:** Low-cost measures (Thermostats, Phantom Loads) to generate cash flow.
-            3.  **Investment:** Reinvesting savings into Structural Upgrades (LED, Solar).
+            st.markdown("""
+            **Strategic Pillars:**
+            1.  **Monitor:** Digital Twin foundation.
+            2.  **Optimize:** Zero-cost measures for immediate cash flow.
+            3.  **Generate:** Reinvest savings into Infrastructure & Solar.
             """)
             
-            # KPI Metrics from Audit Data (Hardcoded from 2025.csv analysis or loaded dynamically)
-            st.markdown("#### Portfolio Potential (2025 Audit)")
-            c1, c2, c3 = st.columns(3)
-            with c1:
-                st.markdown('<div class="metric-box"><div class="metric-val">€ 1.8M</div><div class="metric-lbl">Total Investment Identified</div></div>', unsafe_allow_html=True)
-            with c2:
-                st.markdown('<div class="metric-box"><div class="metric-val">€ 650k</div><div class="metric-lbl">Potential Annual Savings</div></div>', unsafe_allow_html=True)
-            with c3:
-                st.markdown('<div class="metric-box"><div class="metric-val">2.8 Yrs</div><div class="metric-lbl">Avg ROI Period</div></div>', unsafe_allow_html=True)
-
-        with col_visual:
-            # Load Billing Data for Distribution Chart
-            df_bill = load_billing_data()
-            if not df_bill.empty and 'Consumo activa total (kWh)' in df_bill.columns:
-                # Top 10 Consumers Chart
-                top_consumers = df_bill.groupby('Nombre suministro')['Consumo activa total (kWh)'].sum().nlargest(10).reset_index()
-                fig = px.bar(top_consumers, x='Consumo activa total (kWh)', y='Nombre suministro', orientation='h',
-                             title="Consumption Distribution: Top 10 Centers",
-                             color='Consumo activa total (kWh)', color_continuous_scale='Blues')
-                fig.update_layout(yaxis={'categoryorder':'total ascending'}, template='plotly_white')
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("Load Billing Data to see consumption distribution.")
+        with col_chart:
+            st.markdown("#### Consumption Distribution (Pareto)")
+            fig_centers = px.bar(df_centers.sort_values('kWh', ascending=True), 
+                                 x='kWh', y='Center', orientation='h',
+                                 text_auto='.2s', color='kWh', color_continuous_scale='Blues')
+            fig_centers.update_layout(template='plotly_white', height=350, margin=dict(l=0,r=0,t=0,b=0))
+            st.plotly_chart(fig_centers, use_container_width=True)
 
     # ==============================================================================
-    # SLIDE 2: DEEP DIVE - VIA AUGUSTA 36 (Pattern & Forecast)
+    # TAB 2: DYNAMIC OPTIMIZATION (THE DEMO)
     # ==============================================================================
-    with tabs[1]:
-        st.title("Site Analysis: Via Augusta 36")
-        st.markdown("Applying **Pattern Recognition** and **AI Forecasting** to identify efficiency gaps.")
+    with tab2:
+        st.markdown("## 2. Real-Time Optimization Simulator")
+        st.markdown("Demonstrating the **'Plan Cero'** effect on a typical facility (e.g., Vía Augusta 36).")
         
-        df_hourly = load_hourly_data()
+        # --- INPUTS ---
+        with st.expander("⚙️ Optimization Levers (Adjust to see impact)", expanded=True):
+            c_in1, c_in2, c_in3 = st.columns(3)
+            
+            # Baseline Parameters (Hidden logic for typical building)
+            base_load = 50 # kW
+            hvac_peak = 80 # kW
+            light_peak = 40 # kW
+            
+            with c_in1:
+                st.markdown("**Phase 1: Ghost Loads**")
+                st.caption("Timers, Regulators, Standby Killers")
+                opt_base = st.slider("Reduction %", 0, 50, 0, help="PDF: Eliminating 22kW of standby A/C")
+                
+            with c_in2:
+                st.markdown("**Phase 2: Thermal Control**")
+                st.caption("Setpoints (21-26°C), Free Cooling")
+                opt_hvac = st.slider("Efficiency Gain %", 0, 60, 0, help="PDF: Cubic law - 20% speed reduction = 50% savings")
+                
+            with c_in3:
+                st.markdown("**Phase 3: Lighting**")
+                st.caption("LED Retrofit + Sensors")
+                opt_light = st.slider("Efficiency Gain %", 0, 70, 0, help="PDF: Switching to LED and demand control")
+
+        # --- CALCULATION ---
+        df_curve, kwh_orig, kwh_opt = generate_dynamic_curve(base_load, hvac_peak, light_peak, opt_base, opt_hvac, opt_light)
         
-        if not df_hourly.empty:
-            # 1. PATTERN VISUALIZATION
-            col_p1, col_p2 = st.columns([2, 1])
-            
-            with col_p1:
-                st.subheader("Historical Consumption Profile")
-                # Filter last 2 weeks for clarity
-                last_date = df_hourly['fecha'].max()
-                start_date = last_date - timedelta(days=14)
-                df_zoom = df_hourly[(df_hourly['fecha'] >= start_date) & (df_hourly['fecha'] <= last_date)]
-                
-                fig_pat = px.line(df_zoom, x='fecha', y='kwh', title="Hourly Load Curve (Last 14 Days)",
-                                  line_shape='spline')
-                fig_pat.update_traces(line=dict(color='#003366', width=2))
-                fig_pat.update_layout(template='plotly_white', xaxis_title="Date", yaxis_title="Power (kW)")
-                st.plotly_chart(fig_pat, use_container_width=True)
-            
-            with col_p2:
-                st.subheader("NILM Disaggregation (Digital Twin)")
-                st.markdown("We decompose the total load into specific end-uses to find waste.")
-                
-                # Simulate NILM breakdown for the average day
-                df_hourly['hour'] = df_hourly['fecha'].dt.hour
-                avg_profile = df_hourly.groupby('hour')['kwh'].mean().reset_index()
-                
-                # Simple logic for breakdown (Simulation)
-                avg_profile['HVAC'] = avg_profile['kwh'] * 0.45
-                avg_profile['Lighting'] = avg_profile['kwh'] * 0.25
-                avg_profile['Base Load'] = avg_profile['kwh'] * 0.30
-                
-                # Stacked Area
-                fig_nilm = go.Figure()
-                fig_nilm.add_trace(go.Scatter(x=avg_profile['hour'], y=avg_profile['Base Load'], stackgroup='one', name='Base Load (Phantom)', line=dict(width=0, color='gray')))
-                fig_nilm.add_trace(go.Scatter(x=avg_profile['hour'], y=avg_profile['Lighting'], stackgroup='one', name='Lighting', line=dict(width=0, color='#f1c40f')))
-                fig_nilm.add_trace(go.Scatter(x=avg_profile['hour'], y=avg_profile['HVAC'], stackgroup='one', name='HVAC', line=dict(width=0, color='#e74c3c')))
-                
-                fig_nilm.update_layout(title="Average Daily Load Breakdown", xaxis_title="Hour of Day", yaxis_title="kW", template='plotly_white', legend=dict(orientation="h", y=-0.2))
-                st.plotly_chart(fig_nilm, use_container_width=True)
+        savings_kwh = kwh_orig - kwh_opt
+        savings_pct = (savings_kwh / kwh_orig) * 100
+        savings_eur = savings_kwh * 0.20 * 365 # Approx annual savings assuming 0.20 eur/kwh and 365 days similar profile
+        
+        # --- RESULTS ---
+        st.divider()
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("Daily Energy (Original)", f"{kwh_orig:,.0f} kWh")
+        m2.metric("Daily Energy (Optimized)", f"{kwh_opt:,.0f} kWh", delta=f"-{savings_pct:.1f}%")
+        m3.metric("Projected Annual Savings", f"€ {savings_eur:,.0f}", delta="Cash Flow")
+        m4.metric("Carbon Avoided", f"{(savings_kwh*0.25*365)/1000:.1f} tCO2", delta="Annual")
 
-            # 2. AI FORECAST
-            st.subheader("AI-Driven Demand Forecast")
-            st.markdown("Predicting future consumption to optimize operations (using Random Forest Regression).")
+        # --- VISUALS ---
+        col_main_chart, col_donut = st.columns([2, 1])
+        
+        with col_main_chart:
+            st.markdown("#### Daily Load Curve Impact")
+            fig_area = go.Figure()
             
-            if st.button("Generate Forecast"):
-                with st.spinner("Running Predictive Model..."):
-                    future_df = run_forecast(df_hourly)
-                    
-                    fig_for = go.Figure()
-                    # Plot History (Last 3 days)
-                    hist_zoom = df_hourly[df_hourly['fecha'] > (df_hourly['fecha'].max() - timedelta(days=3))]
-                    fig_for.add_trace(go.Scatter(x=hist_zoom['fecha'], y=hist_zoom['kwh'], name='Historical Data', line=dict(color='gray')))
-                    # Plot Forecast
-                    fig_for.add_trace(go.Scatter(x=future_df['fecha'], y=future_df['predicted_kwh'], name='AI Forecast (Next 7 Days)', line=dict(color='#005599', dash='dot')))
-                    
-                    fig_for.update_layout(template='plotly_white', xaxis_title="Date", yaxis_title="Power (kW)")
-                    st.plotly_chart(fig_for, use_container_width=True)
-
-        else:
-            st.warning("Hourly data file not found in 'data/' folder. Please upload '03122025_Distribución eléctrica horaria.csv'.")
+            # Original Line
+            fig_area.add_trace(go.Scatter(x=df_curve['Hour'], y=df_curve['Original'], 
+                                          mode='lines', name='Baseline',
+                                          line=dict(color='gray', width=2, dash='dot')))
+            
+            # Optimized Stack
+            fig_area.add_trace(go.Scatter(x=df_curve['Hour'], y=df_curve['Base'], 
+                                          stackgroup='one', name='Base Load (Opt)', line=dict(width=0, color='#3498db')))
+            fig_area.add_trace(go.Scatter(x=df_curve['Hour'], y=df_curve['Lighting'], 
+                                          stackgroup='one', name='Lighting (Opt)', line=dict(width=0, color='#f1c40f')))
+            fig_area.add_trace(go.Scatter(x=df_curve['Hour'], y=df_curve['HVAC'], 
+                                          stackgroup='one', name='HVAC (Opt)', line=dict(width=0, color='#e74c3c')))
+            
+            fig_area.update_layout(height=400, xaxis_title="Hour of Day", yaxis_title="Power (kW)", 
+                                   template='plotly_white', hovermode="x unified", legend=dict(orientation="h", y=1.1))
+            st.plotly_chart(fig_area, use_container_width=True)
+            
+        with col_donut:
+            st.markdown("#### Optimized Energy Mix")
+            # Calculate mix for the optimized scenario
+            mix_data = pd.DataFrame([
+                {'Source': 'Base Load', 'kWh': df_curve['Base'].sum()},
+                {'Source': 'Lighting', 'kWh': df_curve['Lighting'].sum()},
+                {'Source': 'HVAC', 'kWh': df_curve['HVAC'].sum()}
+            ])
+            fig_donut = px.pie(mix_data, values='kWh', names='Source', hole=0.5, 
+                               color='Source',
+                               color_discrete_map={'Base Load':'#3498db', 'Lighting':'#f1c40f', 'HVAC':'#e74c3c'})
+            fig_donut.update_layout(height=350, margin=dict(l=0,r=0,b=0,t=30), showlegend=False)
+            fig_donut.update_traces(textposition='inside', textinfo='percent+label')
+            st.plotly_chart(fig_donut, use_container_width=True)
 
     # ==============================================================================
-    # SLIDE 3: SOLAR GENERATION & NET ZERO
+    # TAB 3: ROADMAP & INVESTMENT
     # ==============================================================================
-    with tabs[2]:
-        st.title("Transition to Net Zero: Solar Generation")
-        st.markdown("### Interactive Solar Sizing Tool")
+    with tab3:
+        st.markdown("## 3. Implementation Roadmap")
         
-        col_input, col_sim = st.columns([1, 3])
+        col_inv1, col_inv2 = st.columns([2, 1])
         
-        with col_input:
-            st.markdown("#### System Configuration")
-            # Solar Inputs
-            area = st.number_input("Available Roof Area (m²)", min_value=100, value=500, step=50)
-            panel_eff = 0.20 # 20% efficiency
-            kwp_per_m2 = 0.200 # approx 200W/m2
+        with col_inv1:
+            st.markdown("#### Measure Prioritization (ROI vs Impact)")
             
-            system_size_kwp = area * kwp_per_m2
-            st.markdown(f"**System Capacity:** {system_size_kwp:.1f} kWp")
+            # Scatter Plot for Measures
+            fig_bubble = px.scatter(df_measures, x='Inv_EUR', y='Savings_EUR', 
+                                    size='Savings_EUR', color='Type',
+                                    text='Measure', hover_data=['ROI_Years'],
+                                    labels={'Inv_EUR': 'Investment (€)', 'Savings_EUR': 'Annual Savings (€)'},
+                                    title="Investment Efficiency Frontier")
             
-            irradiance = st.slider("Avg. Irradiance (Peak Sun Hours)", 3.0, 7.0, 5.0)
+            fig_bubble.update_traces(textposition='top center')
+            fig_bubble.update_layout(template='plotly_white', height=500)
+            # Add a reference line for 2-year ROI
+            fig_bubble.add_shape(type="line", x0=0, y0=0, x1=300000, y1=150000, 
+                                 line=dict(color="green", width=1, dash="dot"))
+            fig_bubble.add_annotation(x=280000, y=140000, text="2-Year ROI Line", showarrow=False, font=dict(color="green"))
             
-        with col_sim:
-            # Solar Simulation Logic
-            if not df_hourly.empty:
-                # Calculate Average Daily Consumption Profile
-                avg_load = df_hourly.groupby(df_hourly['fecha'].dt.hour)['kwh'].mean()
-                
-                # Simulate Solar Curve (Gaussian Bell Curve centered at 13:00)
-                hours = np.arange(24)
-                # Simple Gaussian model for solar: Peak * exp(- (t - 13)^2 / (2 * width^2))
-                # Width controls how wide the day is
-                solar_curve = system_size_kwp * np.exp(- (hours - 13)**2 / (2 * 2.5**2))
-                # Adjust for irradiance factor (simplified)
-                solar_curve = solar_curve * (irradiance / 5.0) 
-                
-                # Metrics
-                total_load_daily = avg_load.sum()
-                total_gen_daily = solar_curve.sum()
-                
-                # Calculate Self-Consumption (Min of Load or Gen at each hour)
-                self_consumption = np.minimum(solar_curve, avg_load)
-                total_self_con = self_consumption.sum()
-                
-                coverage = (total_self_con / total_load_daily) * 100
-                export = total_gen_daily - total_self_con
-                
-                # Visualization
-                fig_sol = go.Figure()
-                fig_sol.add_trace(go.Scatter(x=hours, y=avg_load, fill='tozeroy', name='Building Consumption', line=dict(color='gray', width=0)))
-                fig_sol.add_trace(go.Scatter(x=hours, y=solar_curve, name='Solar Generation', line=dict(color='#f39c12', width=3)))
-                
-                # Overlap Area
-                fig_sol.add_trace(go.Scatter(x=hours, y=self_consumption, fill='tozeroy', name='Self-Consumption', line=dict(width=0, color='#27ae60'), opacity=0.5))
-                
-                fig_sol.update_layout(title="Daily Energy Balance (Average Day)", xaxis_title="Hour", yaxis_title="kW", template='plotly_white')
-                st.plotly_chart(fig_sol, use_container_width=True)
-                
-                # Impact Metrics
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Grid Independence", f"{coverage:.1f}%")
-                m2.metric("Daily Generation", f"{total_gen_daily:.0f} kWh")
-                m3.metric("CO2 Saved (Daily)", f"{total_self_con * 0.25:.1f} kg") # 0.25 kg/kWh factor
-            else:
-                st.info("Load Hourly Data in Tab 2 to run Solar Simulation.")
+            st.plotly_chart(fig_bubble, use_container_width=True)
+            
+        with col_inv2:
+            st.markdown("#### Solar Potential Calculator")
+            st.caption("Based on Madrid/Barcelona Irradiance")
+            
+            roof_area = st.number_input("Available Roof Area (m²)", 100, 5000, 500)
+            solar_power_kwp = roof_area * 0.20 # approx 200W/m2
+            
+            # Simple production calc
+            daily_production = solar_power_kwp * 4.5 # 4.5 Peak Sun Hours avg
+            annual_production = daily_production * 365
+            annual_saving_est = annual_production * 0.15 # 0.15 eur/kwh avoided cost
+            
+            st.markdown(f"""
+            <div style="background-color:#fff; padding:15px; border-radius:10px; border:1px solid #ddd;">
+                <h2 style="text-align:center; color:#f39c12;">{solar_power_kwp:.1f} kWp</h2>
+                <p style="text-align:center;">System Size</p>
+                <hr>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Annual Gen:</span>
+                    <strong>{annual_production/1000:.1f} MWh</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Savings:</span>
+                    <strong>€ {annual_saving_est:,.0f}/yr</strong>
+                </div>
+                <div style="display:flex; justify-content:space-between;">
+                    <span>Est. CAPEX:</span>
+                    <strong>€ {solar_power_kwp * 800:,.0f}</strong>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            st.info("💡 Strategic Note: Solar projects not only reduce OpEx but can generate Energy Attribute Certificates (CAEs).")
+
+        st.markdown("### Action Plan Status")
+        # Simple dataframe display for the status table
+        plan_data = {
+            'Phase': ['1. Monitoring', '1. Monitoring', '2. Optimization', '2. Optimization', '3. Generation'],
+            'Action': ['Deploy Digital Twin', 'Set KPI Dashboards', 'Thermostat Policy', 'Ghost Load Timers', 'Rooftop Solar'],
+            'Status': ['Done', 'In Progress', 'Ready to Start', 'Ready to Start', 'Planning'],
+            'Owner': ['DAF Equip', 'IT', 'Maintenance', 'Maintenance', 'Engineering']
+        }
+        st.dataframe(pd.DataFrame(plan_data), use_container_width=True, hide_index=True)
 
 if __name__ == "__main__":
     main()
