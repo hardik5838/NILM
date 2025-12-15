@@ -65,28 +65,52 @@ def load_hourly_data():
     """Loads the hourly data (Via Augusta 36)."""
     try:
         data_dir = "data"
-        # Look for the hourly file uploaded
-        files = [f for f in os.listdir(data_dir) if "horaria" in f or "lecturas" in f.lower()]
-        if not files: return pd.DataFrame()
         
-        file_path = os.path.join(data_dir, files[0])
+        # 1. SEARCH: Look for the specific file you uploaded
+        target_files = [f for f in os.listdir(data_dir) if "Distribución" in f or "Lecturas" in f]
+        
+        if not target_files:
+            # Fallback: Look for any CSV that might be the hourly one
+            target_files = [f for f in os.listdir(data_dir) if f.endswith(".csv") and "horaria" in f.lower()]
+            
+        if not target_files: 
+            return pd.DataFrame()
+        
+        # Use the first match found
+        file_path = os.path.join(data_dir, target_files[0])
+        
+        # 2. LOAD: Use the robust loading logic
         df = pd.read_csv(file_path, sep=None, engine='python', on_bad_lines='skip')
         
-        # Robust Cleaning from Tool #1
+        # 3. CLEAN: Standardize columns
         df.rename(columns=lambda x: x.strip(), inplace=True)
-        col_mapping = {'Fecha y hora': 'fecha', 'Fecha': 'fecha', 'Energía activa': 'kwh', 'Energía activa (kWh)': 'kwh'}
+        
+        # Map your specific columns (based on your file structure)
+        col_mapping = {
+            'Fecha y hora': 'fecha', 
+            'Fecha': 'fecha', 
+            'Energía activa': 'kwh', 
+            'Energía activa (kWh)': 'kwh'
+        }
         df.rename(columns=col_mapping, inplace=True)
         
-        if 'kwh' in df.columns and df['kwh'].dtype == object:
-            df['kwh'] = (df['kwh'].astype(str)
-                         .str.replace('"', '', regex=False)
-                         .str.replace(',', '.', regex=False)) # Assume simple comma decimal if quotes exist
+        # Clean numeric data (handle "309" or "309,00")
+        if 'kwh' in df.columns:
+            if df['kwh'].dtype == object:
+                df['kwh'] = (df['kwh'].astype(str)
+                             .str.replace('"', '', regex=False)
+                             .str.replace('.', '', regex=False) # Remove thousands dot
+                             .str.replace(',', '.', regex=False)) # Comma to dot
             df['kwh'] = pd.to_numeric(df['kwh'], errors='coerce')
             
+        # Clean Dates
         df['fecha'] = pd.to_datetime(df['fecha'], dayfirst=True, errors='coerce')
         df.dropna(subset=['fecha', 'kwh'], inplace=True)
+        
         return df
-    except Exception:
+
+    except Exception as e:
+        # st.error(f"Debug Error: {e}") # Uncomment to see specific error details on screen
         return pd.DataFrame()
 
 # --------------------------------------------------------------------------
