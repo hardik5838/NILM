@@ -43,19 +43,3 @@ def clean_and_process_data(df):
     """
     # Your logic goes here
     return df
-
-# --- SIDEBAR UI ---
-st.sidebar.title("Data Source Settings")
-source_mode = st.sidebar.radio("Select Source:", ["GitHub", "Local Disk"])
-
-raw_data = None
-
-if source_mode == "GitHub":
-    # 1. Provide a dropdown (st.selectbox) of filenames
-    # 2. Trigger load_from_github
-    pass
-
-else:
-    # 1. Show file uploader (st.file_uploader)
-    # 2. Trigger load_from_local
-    pass
