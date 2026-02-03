@@ -5,8 +5,7 @@ import plotly
 from io import StringIO
 
 # --- CONFIGURATION ---
-GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/tree/main/data/"
-
+GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/main/data/"
 def load_from_github(file_name):
     base_url = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/data/"
     full_url = base_url + file_name
@@ -18,7 +17,6 @@ def load_from_github(file_name):
     else:
         st.error("Could not find the file on GitHub!")
         return None
-    pass
 
 
 
@@ -29,17 +27,12 @@ def load_from_local(uploaded_file):
     except Exception as e:
         st.error(f"Error reading local file: {e}")
         return None
-    pass
-
 
 
 def clean_and_process_data(df):
-    """
-    CORE MATH TASK:
-    1. Convert 'time' column to datetime.
-    2. Filter for the 3-year range.
-    3. Handle missing values (NaNs).
-    4. Return the cleaned dataframe.
-    """
-    # Your logic goes here
+    df['time'] = pd.to_datetime(df['time'], errors='coerce') 
+    # This fills gaps using interpolation 
+    df = df.sort_values('time')
+    df['energy consumption'] = df['energy consumption'].interpolate(method='linear')
+    df['temprature'] = df['temprature'].interpolate(method='linear')
     return df
