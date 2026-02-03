@@ -30,3 +30,18 @@ else:
 if raw_data is not None:
     st.session_state['my_data'] = clean_and_process_data(raw_data)
     st.success("Data ready for analysis!")
+
+
+# 1. Import the function from your analysis file
+from analysis_file import run_analysis
+
+# 2. Call it and capture the two things it returns
+if 'my_data' in st.session_state:
+    stats_df, hourly_curves = run_analysis()
+    
+    # 3. Display the results
+    st.subheader("Monthly R-Values")
+    st.write(stats_df)
+    
+    st.subheader("Energy Curves (Weekday vs Weekend)")
+    st.line_chart(hourly_curves)
