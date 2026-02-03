@@ -20,6 +20,8 @@ def load_from_github(file_name):
         return None
     pass
 
+
+
 def load_from_local(uploaded_file):
     try:
         df = pd.read_csv(uploaded_file)
@@ -28,6 +30,8 @@ def load_from_local(uploaded_file):
         st.error(f"Error reading local file: {e}")
         return None
     pass
+
+
 
 def clean_and_process_data(df):
     """
@@ -55,29 +59,3 @@ else:
     # 1. Show file uploader (st.file_uploader)
     # 2. Trigger load_from_local
     pass
-
-# --- MAIN PAGE LOGIC ---
-st.title("Energy Data Dashboard")
-
-if raw_data is not None:
-    # Process the data
-    cleaned_data = clean_and_process_data(raw_data)
-    
-    # Save to session state so other files can see it
-    st.session_state['processed_data'] = cleaned_data
-    
-    # --- VISUALIZATION ---
-    st.subheader("Analysis Charts")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.write("Time vs Consumption")
-        # Logic: st.line_chart(data=..., x='time', y='consumption')
-        
-    with col2:
-        st.write("Temperature vs Consumption")
-        # Logic: st.scatter_chart or similar
-        
-else:
-    st.info("Please select or upload a data file from the sidebar to begin.")
