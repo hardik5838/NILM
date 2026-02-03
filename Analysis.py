@@ -1,14 +1,13 @@
 import streamlit as st
 import pandas as pd
-from scipy import stats # For R-value
+from scipy import stats 
 
 def run_analysis():
     if 'my_data' not in st.session_state:
         st.error("No data found.")
         return
-
     df = st.session_state['my_data']
-
+    
     # 1. Feature Engineering
     df['month'] = df['time'].dt.month
     df['hour'] = df['time'].dt.hour
@@ -20,7 +19,7 @@ def run_analysis():
         m_data = df[df['month'] == month]
         if not m_data.empty:
             # Calculate R-value (Correlation)
-            slope, intercept, r_value, p_value, std_err = stats.linregress(m_data['temprature'], m_data['energy consumption'])
+            slope, intercept, r_value, p_value, std_err = stats.linregress(m_data['Temp'], m_data['kWh'])
             
             monthly_stats.append({
                 'Month': month,
@@ -29,6 +28,5 @@ def run_analysis():
             })
     
     # 3. Weekend vs Weekday Profiles
-    curves = df.groupby(['is_weekend', 'hour'])['energy consumption'].mean().unstack(level=0)
-    
+    curves = df.groupby(['is_weekend', 'hour'])['energy consumption'].mean().unstack(level=0) 
     return pd.DataFrame(monthly_stats), curves
