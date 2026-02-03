@@ -5,7 +5,7 @@ import plotly
 from io import StringIO
 
 # --- CONFIGURATION ---
-GITHUB_REPO_URL = "https://raw.githubusercontent.com/username/repo/main/data/"
+GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/tree/main/data/"
 
 def load_from_github(file_name):
     """
