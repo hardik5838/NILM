@@ -11,10 +11,12 @@ GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/main/data/"
 
 def get_github_file_list():
     response = requests.get(GITHUB_API_URL)
-    if response.status_code == 200:
-        # Filter for files ending in .csv
-        return [item['name'] for item in response.json() if item['name'].endswith('.csv')]
-    return []
+    if response.status_code != 200:
+        st.sidebar.error(f"GitHub Error: {response.status_code}")
+        return []
+    data = response.json()
+    files = [item['name'] for item in data if item['name'].endswith('.csv')]
+    return files
 
 def load_from_github(file_name):
     if not file_name or not isinstance(file_name, str):
