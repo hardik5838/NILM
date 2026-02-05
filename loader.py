@@ -5,6 +5,8 @@ import plotly
 from io import StringIO
 import os 
 
+
+@st.cache_data
 # --- CONFIGURATION ---
 GITHUB_API_URL = "https://api.github.com/repos/hardik5838/NILM/contents/data"
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/main/data/"
