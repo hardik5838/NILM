@@ -16,9 +16,13 @@ raw_data = None
 # 2. The Dynamic Button
 if source == "GitHub":
     files = get_github_file_list()
-    selected = st.sidebar.selectbox("Select File", files)
-    if st.sidebar.button("Fetch from GitHub"):
-        raw_data = load_from_github(selected)
+    if files:
+        selected = st.sidebar.selectbox("Select File", files)
+        if st.sidebar.button("Fetch from GitHub"):
+            raw_data = load_from_github(selected)
+    else:
+        st.sidebar.warning("Waiting for file list from GitHub...")
+        
 else:
     uploaded = st.sidebar.file_uploader("Upload CSV", type="csv")
     if uploaded:
