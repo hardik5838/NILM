@@ -3,12 +3,21 @@ import pandas as pd
 import requests
 import plotly
 from io import StringIO
+import os 
 
 # --- CONFIGURATION ---
+GITHUB_API_URL = "https://api.github.com/repos/hardik5838/NILM/contents/data"
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/main/data/"
+
+def get_github_file_list():
+    response = requests.get(GITHUB_API_URL)
+    if response.status_code == 200:
+        # Filter for files ending in .csv
+        return [item['name'] for item in response.json() if item['name'].endswith('.csv')]
+    return []
+
 def load_from_github(file_name):
-    base_url = "https://raw.githubusercontent.com/YOUR_USERNAME/YOUR_REPO/main/data/"
-    full_url = base_url + file_name
+    full_url = GITHUB_REPO_URL + file_name
     response = requests.get(full_url)
     if response.status_code == 200:
         data = StringIO(response.text)
