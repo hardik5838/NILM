@@ -6,6 +6,6 @@ statsmodels
 numpy
 requests
 thefuzz
+python-Levenshtein
 openpyxl
 pypdf
-os
