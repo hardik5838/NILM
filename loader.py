@@ -1,4 +1,4 @@
-import streamlit as st
+p=import streamlit as st
 import pandas as pd
 import requests
 import plotly
@@ -38,7 +38,7 @@ def load_from_github(file_name):
 
 def load_from_local(uploaded_file):
     try:
-        df = pd.read_csv(uploaded_file)
+        df = pd.read_csv(uploaded_file, sep= None, engine='python')
         return df
     except Exception as e:
         st.error(f"Error reading local file: {e}")
