@@ -17,6 +17,9 @@ def get_github_file_list():
     return []
 
 def load_from_github(file_name):
+    if not file_name or not isinstance(file_name, str):
+        st.error("Invalid file selection.")
+        return None
     full_url = GITHUB_REPO_URL + file_name
     response = requests.get(full_url)
     if response.status_code == 200:
