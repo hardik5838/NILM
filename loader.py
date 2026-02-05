@@ -43,5 +43,5 @@ def clean_and_process_data(df):
     # This fills gaps using interpolation 
     df = df.sort_values('time')
     df['energy consumption'] = df['energy consumption'].interpolate(method='linear')
-    df['temprature'] = df['temprature'].interpolate(method='linear')
+    df['temp'] = df['temp'].interpolate(method='linear')
     return df
