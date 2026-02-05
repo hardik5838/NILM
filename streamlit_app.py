@@ -5,19 +5,17 @@ import plotly.graph_objects as go
 import numpy as np
 import io
 import requests
-from datetime import datetime, timedelta
-
+from datetime import datetime, timedelta5
 import streamlit as st
-from loader import load_from_github, load_from_local, clean_and_process_data
+from loader import get_github_file_list, load_from_github, load_from_local, clean_and_process_data
 
 # 1. The Selection Button
 source = st.sidebar.radio("Data Source", ["GitHub", "Local Disk"])
-
 raw_data = None
 
 # 2. The Dynamic Button
 if source == "GitHub":
-    files = ["data1.csv", "data2.csv", "data3.csv"]
+    files = get_github_file_list
     selected = st.sidebar.selectbox("Select File", files)
     if st.sidebar.button("Fetch from GitHub"):
         raw_data = load_from_github(selected)
