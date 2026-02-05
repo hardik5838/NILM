@@ -9,9 +9,9 @@ def run_analysis():
     df = st.session_state['my_data']
     
     # 1. Feature Engineering
-    df['month'] = df['time'].dt.month
-    df['hour'] = df['time'].dt.hour
-    df['is_weekend'] = df['time'].dt.dayofweek >= 5
+    df['month'] = df['Fecha'].dt.month
+    df['hour'] = df['Fecha'].dt.hour
+    df['is_weekend'] = df['Fecha'].dt.dayofweek >= 5
 
     # 2. Monthly Stats & R-Values
     monthly_stats = []
