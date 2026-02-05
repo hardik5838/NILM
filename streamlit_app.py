@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import numpy as np
 import io
 import requests
-from datetime import datetime, timedelta5
+from datetime import datetime, timedelta
 import streamlit as st
 from loader import get_github_file_list, load_from_github, load_from_local, clean_and_process_data
 
