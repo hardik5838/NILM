@@ -39,7 +39,9 @@ def load_from_local(uploaded_file):
 
 
 def clean_and_process_data(df):
-    df['Fecha'] = pd.to_dateFecha(df['Fecha'], errors='coerce') 
+    if df is None: # Safety check
+        return None
+    df['Fecha'] = pd.to_datetime(df['Fecha'], errors='coerce') 
     # This fills gaps using interpolation 
     df = df.sort_values('Fecha')
     df['kWh'] = df['kWh'].interpolate(method='linear')
