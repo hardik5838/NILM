@@ -23,10 +23,10 @@ def run_analysis():
             
             monthly_stats.append({
                 'Month': month,
-                'Avg_Energy': m_data['energy consumption'].mean(),
+                'Avg_Energy': m_data['kWh'].mean(),
                 'R_Value': r_value
             })
     
     # 3. Weekend vs Weekday Profiles
-    curves = df.groupby(['is_weekend', 'hour'])['energy consumption'].mean().unstack(level=0) 
+    curves = df.groupby(['is_weekend', 'hour'])['kWh'].mean().unstack(level=0) 
     return pd.DataFrame(monthly_stats), curves
