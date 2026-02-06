@@ -6,11 +6,12 @@ from io import StringIO
 import os 
 
 
-@st.cache_data()
 # --- CONFIGURATION ---
 GITHUB_API_URL = "https://api.github.com/repos/hardik5838/NILM/contents/data"
 GITHUB_REPO_URL = "https://raw.githubusercontent.com/hardik5838/NILM/main/data/"
 
+
+@st.cache_data(ttl=3600)
 def get_github_file_list():
     response = requests.get(GITHUB_API_URL)
     if response.status_code != 200:
