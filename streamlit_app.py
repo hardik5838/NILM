@@ -1,44 +1,45 @@
-# Complete Dashboard Energético Asepeyo Application Code
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 
-# Load Data Functions
+# Load Energy Data
+@st.cache
+def load_energy_data():
+    energy_data = pd.read_csv('data/test file Via 36 - 1.csv')
+    return energy_data
 
-def load_data():
-    """Loads the necessary data for the app."""
-    # Implement data loading logic here
-    pass
+# Load Weather Data
+@st.cache
+def load_weather_data():
+    weather_data = pd.read_csv('data/weather_data.csv')
+    return weather_data
 
-# Filtering Functions
+# Function to Filter Data
+def filter_data(energy_data, start_date, end_date):
+    mask = (energy_data['timestamp'] >= start_date) & (energy_data['timestamp'] <= end_date)
+    return energy_data.loc[mask]
 
-def filter_data(data):
-    """Filters the dataset based on user input."""
-    # Implement filtering logic here
-    pass
+# NILM Simulation
+def run_nilm_simulation(filtered_data):
+    # Implement NILM simulation logic here
+    simulated_results = {'result': 'Simulation complete'}
+    return simulated_results
 
-# NILM Integration Function
+# Streamlit App Layout
+st.title("NILM Application")
 
-def integrate_nilm(data):
-    """Integrates NILM processes into the application."""
-    # Implement NILM integration logic here
-    pass
+# Load Data
+energy_data = load_energy_data()
+weather_data = load_weather_data()
 
-# Main Application Logic
+# Date Filters
+start_date = st.sidebar.date_input('Start date', value=pd.to_datetime('2021-01-01'))
+end_date = st.sidebar.date_input('End date', value=pd.to_datetime('2021-12-31'))
 
-def main():
-    """Main application function."""
-    st.title('Dashboard Energético Asepeyo')
-    st.write('Welcome to the Dashboard Energético Asepeyo!')
-    # Load Data
-    data = load_data()
-    # Apply Filtering
-    filtered_data = filter_data(data)
-    # Integrate NILM
-    nilm_results = integrate_nilm(filtered_data)
-    # Display Results
-    st.write(nilm_results)
+# Filter Data
+filtered_data = filter_data(energy_data, start_date, end_date)
 
-if __name__ == '__main__':
-    main()
+# Run NILM Simulation
+if st.button('Run NILM Simulation'):
+    results = run_nilm_simulation(filtered_data)
+    st.write(results)
