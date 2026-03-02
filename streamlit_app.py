@@ -1,40 +1,35 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 
-# Function to load data
+# Data loading function
 @st.cache
 def load_data():
-    data = pd.read_csv('data.csv')
-    return data
+    # replace 'data.csv' with your actual data file
+    df = pd.read_csv('data.csv') 
+    return df
 
-# Function to plot energy consumption
-def plot_energy_consumption(data):
-    plt.figure(figsize=(10, 5))
-    sns.lineplot(x='Datetime', y='Energy_Consumption', data=data)
-    plt.title('Energy Consumption Over Time')
-    plt.xlabel('Time')
-    plt.ylabel('Energy Consumption (kWh)')
-    st.pyplot() 
+# Sidebar configuration
+st.sidebar.title('Dashboard Energético Asepeyo')
+page = st.sidebar.selectbox('Select Page:', ['Home', 'Data Visualization', 'NILM Simulation'])
 
-# Main function
-def main():
-    st.title('Dashboard Energético')
-    data = load_data()
+# Load data
+data = load_data()
 
-    # Sidebar for selections
-    page = st.sidebar.selectbox('Choose a page:', ['Home', 'Simulación NILM (Avanzado)', 'About'])
+# Main dashboard logic
+if page == 'Home':
+    st.title('Welcome to the Dashboard Energético Asepeyo')
+    st.write('This is the home page of the dashboard.')
 
-    if page == 'Home':
-        st.write('Welcome to the Dashboard Energético')
-        st.write('This dashboard provides an overview of energy consumption.')
-        plot_energy_consumption(data)
-    elif page == 'Simulación NILM (Avanzado)':
-        st.write('Advanced NILM simulation will be implemented here')
-    elif page == 'About':
-        st.write('This dashboard is designed to help users understand energy consumption patterns.')
+elif page == 'Data Visualization':
+    st.title('Data Visualization')
+    st.write('Here you can visualize your data.')
+    st.line_chart(data['target_column'])  # replace 'target_column' with the actual column name
 
-if __name__ == '__main__':
-    main()
+elif page == 'NILM Simulation':
+    st.title('NILM Simulation')
+    st.write('This is the NILM simulation page.')
+    # Add your NILM simulation code logic here
+    st.write('NILM simulation details will go here.')
+
+# Add any additional logic and features you'd like to include in the dashboard.
