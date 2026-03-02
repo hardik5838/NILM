@@ -1,1 +1,49 @@
-import pandas as pd\nimport streamlit as st\n\ndef load_energy_data(file_path):\n    try:\n        data = pd.read_csv(file_path)\n        return data\n    except FileNotFoundError as e:\n        st.error('File not found. Please check the file path.')\n        return None\n    except pd.errors.EmptyDataError:\n        st.error('No data found in the file. Please check the file contents.')\n        return None\n    except Exception as e:\n        st.error(f'An error occurred: {e}')\n        return None\n\ndef main():\n    st.title('Energy Data Visualization')\n\n    # Load energy data only\n    energy_data_file = 'data/test file Via 36 - 1.csv'\n    energy_data = load_energy_data(energy_data_file)\n\n    if energy_data is not None:\n        st.write(energy_data)\n        # Visualization code can be added here\n        st.line_chart(energy_data)\n\nif __name__ == '__main__':\n    main()
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
+import io
+import requests
+from datetime import datetime, timedelta
+import streamlit as st
+from loader import get_github_file_list, load_from_github, load_from_local, clean_and_process_data
+
+# 1. The Selection Button
+source = st.sidebar.radio("Data Source", ["GitHub", "Local Disk"])
+raw_data = None
+
+# 2. The Dynamic Button
+if source == "GitHub":
+    files = get_github_file_list()
+    if files:
+        selected = st.sidebar.selectbox("Select File", files)
+        if st.sidebar.button("Fetch from GitHub"):
+            raw_data = load_from_github(selected)
+    else:
+        st.sidebar.warning("Waiting for file list from GitHub...")
+        
+else:
+    uploaded = st.sidebar.file_uploader("Upload CSV", type="csv")
+    if uploaded:
+        raw_data = load_from_local(uploaded)
+
+# 3. The Execution
+if raw_data is not None:
+    st.session_state['my_data'] = clean_and_process_data(raw_data)
+    st.success("Data ready for analysis!")
+
+
+# 1. Import the function from your analysis file
+from analysis_file import run_analysis
+
+# 2. Call it and capture the two things it returns
+if 'my_data' in st.session_state:
+    stats_df, hourly_curves = run_analysis()
+    
+    # 3. Display the results
+    st.subheader("Monthly R-Values")
+    st.write(stats_df)
+    
+    st.subheader("Energy Curves (Weekday vs Weekend)")
+    st.line_chart(hourly_curves)
