@@ -1,17 +1,32 @@
 import streamlit as st
+import pandapower as pp
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import io
 import re
 
 # --- PAGE CONFIGURATION ---
 st.set_page_config(page_title="Gracia Real Data DSM Validation", layout="wide")
-st.title("⚡ Gracia Building: Real-Data DSM Validation")
-st.markdown("This dashboard calculates new KPIs based strictly on the provided July 2025 meter readings, applying a 50% reduction to flexible daytime HVAC/Lighting loads.")
+st.title("⚡ Gracia Public Building DSM & Grid Validation (The Oasis Project)")
+st.markdown("Validating load-shifting and peak-clipping capabilities using real July 2025 meter data.")
+
+# --- SIDEBAR PARAMETERS ---
+st.sidebar.header("⚙️ Optimization Parameters")
+st.sidebar.markdown("Adjust the flexibility of the building's daytime subsystems (HVAC/Lighting).")
+
+# Slider for load reduction 
+daytime_reduction = st.sidebar.slider("Daytime Load Reduction (%)", 0, 100, 50) / 100.0
+
+st.sidebar.header("📊 Grid & Tariff Settings")
+transformer_capacity_kva = st.sidebar.number_input("Transformer Capacity (kVA)", value=250.0)
+contracted_power_kw = st.sidebar.number_input("Contracted Power P1 (kW)", value=152.1)
+
+# Tariffs
+price_p1 = st.sidebar.number_input("P1 Peak Price (€/kWh)", value=0.35)
+price_int = st.sidebar.number_input("Intermediate Price (€/kWh)", value=0.25)
+price_p6 = st.sidebar.number_input("P6 Valley Price (€/kWh)", value=0.15)
 
 # --- HARDCODED RAW DATA ---
-# The exact data provided, embedded directly into the app.
 raw_data_string = """Fecha y hora	Tipo lectura	Energía activa
 27/06/2025 00:00	ESTIMADA	39.85
 27/06/2025 01:00	ESTIMADA	39.85
@@ -758,11 +773,10 @@ raw_data_string = """Fecha y hora	Tipo lectura	Energía activa
 27/07/2025 22:00	REAL	26.00
 27/07/2025 23:00	REAL	27.00"""
 
-# Robust parsing logic to avoid whitespace/tab issues
+# Data parsing
 lines = raw_data_string.strip().split('\n')
 parsed_data = []
 for line in lines[1:]:
-    # Split by any whitespace matching the columns
     parts = re.split(r'\t+', line)
     if len(parts) == 3:
         parsed_data.append({
@@ -775,84 +789,131 @@ df['Datetime'] = pd.to_datetime(df['Datetime'], format='%d/%m/%Y %H:%M')
 df['Hour'] = df['Datetime'].dt.hour
 df['Date'] = df['Datetime'].dt.date
 
-# --- GRID & OPTIMIZATION PARAMETERS ---
-contracted_limit_kw = 152.10
-base_night_load_kw = 40.0  # Approx constant non-flexible infrastructure load
+# --- DATA PROCESSING & OPTIMIZATION ---
+base_night_load_kw = 40.0 
 
-# 1. Apply Flexibility Logic (50% reduction of active daytime load)
 def optimize_load(row):
     h = row['Hour']
     kw = row['Energy (kW)']
-    # Target daytime operational hours (08:00 to 18:00) where HVAC/Lighting run
     if 8 <= h <= 18:
-        # Calculate flexible load (Total minus base infrastructure)
         active_load = max(0, kw - base_night_load_kw)
-        # Apply 50% reduction to the flexible load (representing HVAC & Lighting optimization)
-        optimized_kw = base_night_load_kw + (active_load * 0.50)
+        optimized_kw = base_night_load_kw + (active_load * (1 - daytime_reduction))
         return optimized_kw
     return kw
 
 df['Optimized_Energy (kW)'] = df.apply(optimize_load, axis=1)
 
-# Pre-cool shift: add 30% of daily savings to the night window (02:00 - 06:00)
+# Pre-cool logic: Shift 30% of what was saved into the P6 window (02:00 - 06:00)
 for d in df['Date'].unique():
     day_data = df[df['Date'] == d]
     daily_saved = (day_data['Energy (kW)'] - day_data['Optimized_Energy (kW)']).sum()
     if daily_saved > 0:
-        shift_amount_per_hour = (daily_saved * 0.30) / 5.0 # Spread across 5 hours (02:00 - 06:00)
+        shift_amount_per_hour = (daily_saved * 0.30) / 5.0 
         mask = (df['Date'] == d) & (df['Hour'] >= 2) & (df['Hour'] <= 6)
         df.loc[mask, 'Optimized_Energy (kW)'] += shift_amount_per_hour
 
-# --- CALCULATE METRICS (NEW NUMBERS BASED ON DATA) ---
-# 1. Recount Violations (Exceeding the 152.10 kW contracted limit)
-baseline_violations = len(df[df['Energy (kW)'] > contracted_limit_kw])
-optimized_violations = len(df[df['Optimized_Energy (kW)'] > contracted_limit_kw])
-violation_drop_percent = ((baseline_violations - optimized_violations) / baseline_violations) * 100 if baseline_violations > 0 else 0
-
-# 2. Virtual Battery Capacity (Max Energy Shifted in a Single Day)
-daily_savings = df.groupby('Date').apply(lambda x: (x['Energy (kW)'] - x['Optimized_Energy (kW)']).sum())
-max_virtual_battery_kwh = daily_savings.max()
-
-# 3. Peak Demand Drops
-baseline_max_peak = df['Energy (kW)'].max()
-optimized_max_peak = df['Optimized_Energy (kW)'].max()
-
-# 4. Total Consumption Drop
-total_baseline_energy = df['Energy (kW)'].sum()
-total_optimized_energy = df['Optimized_Energy (kW)'].sum()
-total_reduction_percent = ((total_baseline_energy - total_optimized_energy) / total_baseline_energy) * 100
-
-# --- DASHBOARD RENDERING ---
-st.header("1. Core Performance Metrics (Recalculated)")
-st.info("These KPIs are generated dynamically from the July 2025 raw dataset, independent of the thesis numbers.")
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Max Peak Demand", f"{optimized_max_peak:.1f} kW", f"{optimized_max_peak - baseline_max_peak:.1f} kW", delta_color="inverse")
-col2.metric("Total Monthly Energy Savings", f"{(total_baseline_energy - total_optimized_energy):.0f} kWh", f"-{total_reduction_percent:.1f}%")
-col3.metric("Contracted Violations (>152.1 kW)", f"{optimized_violations}", f"{optimized_violations - baseline_violations} instances", delta_color="inverse")
-col4.metric("Virtual Battery Capacity", f"{max_virtual_battery_kwh:.1f} kWh", "Deployed via DSM")
-
-st.markdown("---")
-
-# Chart 1: The Whole Month Load Curve
-st.subheader("📉 Full Month Load Curve (July 2025)")
-fig_month = go.Figure()
-fig_month.add_trace(go.Scatter(x=df['Datetime'], y=df['Energy (kW)'], mode='lines', name='Baseline Consumption', line=dict(color='indianred', width=1)))
-fig_month.add_trace(go.Scatter(x=df['Datetime'], y=df['Optimized_Energy (kW)'], mode='lines', name='Optimized GEB Profile', fill='tozeroy', line=dict(color='seagreen', width=1)))
-fig_month.add_hline(y=contracted_limit_kw, line_dash="dash", line_color="orange", annotation_text="152.10 kW Contract Limit")
-
-fig_month.update_layout(xaxis_title="Date", yaxis_title="Power Demand (kW)", height=450, margin=dict(l=0, r=0, t=30, b=0))
-st.plotly_chart(fig_month, use_container_width=True)
-
-# Chart 2: Daily Focus (Looking at the hottest day / highest peak)
+# Find Peak Day to drive the 24-hour charts
 peak_date = df.loc[df['Energy (kW)'].idxmax(), 'Date']
 df_peak_day = df[df['Date'] == peak_date]
 
-st.subheader(f"🔍 Peak Day Deep Dive ({peak_date.strftime('%d/%m/%Y')})")
-fig_day = go.Figure()
-fig_day.add_trace(go.Bar(x=df_peak_day['Hour'], y=df_peak_day['Energy (kW)'], name="Baseline (kW)", marker_color='indianred'))
-fig_day.add_trace(go.Bar(x=df_peak_day['Hour'], y=df_peak_day['Optimized_Energy (kW)'], name="Optimized (kW)", marker_color='seagreen'))
-fig_day.add_hline(y=contracted_limit_kw, line_dash="dash", line_color="orange", annotation_text="Contract Limit")
+total_baseline_kw = df_peak_day['Energy (kW)'].values
+total_optimized_kw = df_peak_day['Optimized_Energy (kW)'].values
+hours = df_peak_day['Hour'].values
 
-fig_day.update_layout(barmode='group', xaxis_title="Hour of Day", yaxis_title="Power Demand (kW)", height=400, margin=dict(l=0, r=0, t=30, b=0))
-st.plotly_chart(fig_day, use_container_width=True)
+# Calculate Peak Day Cost
+def get_price(h):
+    if 0 <= h < 8: return price_p6
+    elif 10 <= h <= 14: return price_p1
+    else: return price_int
+
+prices = np.array([get_price(h) for h in hours])
+baseline_cost = np.sum(total_baseline_kw * prices)
+optimized_cost = np.sum(total_optimized_kw * prices)
+
+# --- PANDAPOWER GRID SIMULATION ---
+def run_grid_simulation(load_profile_kw):
+    net = pp.create_empty_network()
+    b_ext = pp.create_bus(net, vn_kv=20., name="External Grid Bus")
+    b_lv = pp.create_bus(net, vn_kv=0.4, name="Building LV Bus")
+    pp.create_ext_grid(net, bus=b_ext)
+    
+    pp.create_transformer_from_parameters(net, hv_bus=b_ext, lv_bus=b_lv, sn_mva=transformer_capacity_kva/1000.0, 
+                                          vn_hv_kv=20., vn_lv_kv=0.4, vkr_percent=1.0, vk_percent=4.0, 
+                                          pfe_kw=1.0, i0_percent=0.1, name="Gracia Local Trafo")
+    
+    load_idx = pp.create_load(net, bus=b_lv, p_mw=0, q_mvar=0, name="Building")
+    trafo_loading = []
+    
+    for p_kw in load_profile_kw:
+        p_mw = p_kw / 1000.0
+        q_mvar = p_mw * np.tan(np.arccos(0.95))
+        net.load.at[load_idx, 'p_mw'] = p_mw
+        net.load.at[load_idx, 'q_mvar'] = q_mvar
+        
+        try:
+            pp.runpp(net)
+            loading_percent = net.res_trafo.loading_percent.iloc[0]
+        except:
+            # Analytical fail-safe if solver fails
+            s_mva = (p_mw / 0.95)
+            loading_percent = (s_mva / (transformer_capacity_kva / 1000.0)) * 100
+            
+        trafo_loading.append(loading_percent)
+    return trafo_loading
+
+baseline_trafo_loading = run_grid_simulation(total_baseline_kw)
+optimized_trafo_loading = run_grid_simulation(total_optimized_kw)
+
+# Count violations overall in the month
+baseline_violations = len(df[df['Energy (kW)'] > contracted_power_kw])
+optimized_violations = len(df[df['Optimized_Energy (kW)'] > contracted_power_kw])
+
+# --- DASHBOARD RENDER ---
+st.header(f"1. Overall KPI Analysis (Based on July 2025)")
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Max Peak Demand", f"{df['Optimized_Energy (kW)'].max():.1f} kW", f"{df['Optimized_Energy (kW)'].max() - df['Energy (kW)'].max():.1f} kW", delta_color="inverse")
+col2.metric("Total Monthly Energy Savings", f"{(df['Energy (kW)'].sum() - df['Optimized_Energy (kW)'].sum()):.0f} kWh", f"-{((df['Energy (kW)'].sum() - df['Optimized_Energy (kW)'].sum()) / df['Energy (kW)'].sum()) * 100:.1f}%")
+col3.metric(f"Violations (> {contracted_power_kw} kW)", f"{optimized_violations}", f"{optimized_violations - baseline_violations} instances", delta_color="inverse")
+daily_savings = df.groupby('Date').apply(lambda x: (x['Energy (kW)'] - x['Optimized_Energy (kW)']).sum())
+col4.metric("Virtual Battery Deployed", f"{daily_savings.max():.1f} kWh", "Max Daily Load Shift")
+
+st.markdown("---")
+
+st.header(f"2. Peak Day Deep-Dive ({peak_date.strftime('%d/%m/%Y')})")
+col_a, col_b = st.columns(2)
+col_a.metric("Daily Cost (Baseline)", f"€{baseline_cost:.2f}")
+col_b.metric("Daily Cost (Optimized)", f"€{optimized_cost:.2f}", f"€{optimized_cost-baseline_cost:.2f}")
+
+# Chart 1: Load Profile Comparison
+st.subheader("📈 Load Profile: Static vs. Grid-Interactive (GEB)")
+fig_load = go.Figure()
+fig_load.add_trace(go.Scatter(x=hours, y=total_baseline_kw, mode='lines', name='Baseline Load', line=dict(color='red', dash='dash')))
+fig_load.add_trace(go.Scatter(x=hours, y=total_optimized_kw, mode='lines', name='Optimized Load (Oasis)', fill='tozeroy', line=dict(color='green')))
+fig_load.add_shape(type="rect", x0=10, y0=0, x1=14, y1=max(total_baseline_kw)+20, fillcolor="orange", opacity=0.2, layer="below", line_width=0)
+fig_load.add_annotation(x=12, y=max(total_baseline_kw)+10, text="High Cost Tariff (P1: 10:00-14:00)", showarrow=False)
+
+fig_load.update_layout(xaxis_title="Hour of Day", yaxis_title="Power Demand (kW)", height=400, margin=dict(l=0, r=0, t=30, b=0))
+st.plotly_chart(fig_load, use_container_width=True)
+
+# Chart 2: Transformer Stress Validation
+st.subheader(f"🔋 Transformer Thermal Stress ({transformer_capacity_kva} kVA Limit)")
+col_c, col_d = st.columns([3, 1])
+
+with col_c:
+    fig_trafo = go.Figure()
+    fig_trafo.add_trace(go.Bar(x=hours, y=baseline_trafo_loading, name="Baseline Loading %", marker_color='indianred'))
+    fig_trafo.add_trace(go.Bar(x=hours, y=optimized_trafo_loading, name="Optimized Loading %", marker_color='lightseagreen'))
+    fig_trafo.add_hline(y=100, line_dash="dash", line_color="red", annotation_text="Transformer Capacity Limit (100%)")
+    fig_trafo.update_layout(barmode='group', xaxis_title="Hour of Day", yaxis_title="Transformer Loading (%)", height=400, margin=dict(l=0, r=0, t=30, b=0))
+    st.plotly_chart(fig_trafo, use_container_width=True)
+
+with col_d:
+    st.markdown("### Daily Peak Violations")
+    base_day_violations = sum(1 for load in baseline_trafo_loading if load > 100)
+    opt_day_violations = sum(1 for load in optimized_trafo_loading if load > 100)
+    st.metric("Violations (Baseline)", base_day_violations)
+    st.metric("Violations (Optimized)", opt_day_violations, delta=opt_day_violations-base_day_violations, delta_color="inverse")
+    
+    st.markdown("""
+    **Analysis:** By utilizing Grey-Box load shifting (pre-cooling during P6 and daytime load shedding), we actively curtail the localized grid stress on the distribution transformer precisely when demand is at its peak.
+    """)
