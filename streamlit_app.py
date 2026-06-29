@@ -3,824 +3,54 @@ import pandapower as pp
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import re
 
 # --- PAGE CONFIGURATION ---
-st.set_page_config(page_title="Gracia Real Data DSM Validation", layout="wide")
+st.set_page_config(page_title="Gracia DSM Validation Dashboard", layout="wide")
 st.title("⚡ Gracia Public Building DSM & Grid Validation (The Oasis Project)")
-st.markdown("Validating load-shifting and peak-clipping capabilities using real July 2025 meter data.")
+st.markdown("Validating load-shifting and peak-clipping capabilities of public infrastructure using Grey-Box flexibility.")
 
 # --- SIDEBAR PARAMETERS ---
 st.sidebar.header("⚙️ Optimization Parameters")
-st.sidebar.markdown("Adjust the flexibility of the building's daytime subsystems (HVAC/Lighting).")
+st.sidebar.markdown("Adjust the flexibility of the building's subsystems to simulate the Oasis algorithm.")
 
-# Slider for load reduction 
-daytime_reduction = st.sidebar.slider("Daytime Load Reduction (%)", 0, 100, 50) / 100.0
+# Sliders for load reduction (simulating the Oasis Optimization Module)
+hvac_reduction = st.sidebar.slider("HVAC Load Reduction (%)", 0, 100, 20) / 100.0
+vent_reduction = st.sidebar.slider("Ventilation Load Reduction (%)", 0, 100, 10) / 100.0
+light_reduction = st.sidebar.slider("Lighting Load Reduction (%)", 0, 100, 30) / 100.0
 
 st.sidebar.header("📊 Grid & Tariff Settings")
-transformer_capacity_kva = st.sidebar.number_input("Transformer Capacity (kVA)", value=250.0)
-contracted_power_kw = st.sidebar.number_input("Contracted Power P1 (kW)", value=152.1)
+transformer_capacity_kva = st.sidebar.number_input("Transformer Capacity (kVA)", value=250)
+contracted_power_kw = st.sidebar.number_input("Contracted Power P1 (kW)", value=330.0)
 
 # Tariffs
 price_p1 = st.sidebar.number_input("P1 Peak Price (€/kWh)", value=0.35)
 price_int = st.sidebar.number_input("Intermediate Price (€/kWh)", value=0.25)
 price_p6 = st.sidebar.number_input("P6 Valley Price (€/kWh)", value=0.15)
 
-# --- HARDCODED RAW DATA ---
-raw_data_string = """Fecha y hora	Tipo lectura	Energía activa
-27/06/2025 00:00	ESTIMADA	39.85
-27/06/2025 01:00	ESTIMADA	39.85
-27/06/2025 02:00	ESTIMADA	39.85
-27/06/2025 03:00	ESTIMADA	39.85
-27/06/2025 04:00	ESTIMADA	39.85
-27/06/2025 05:00	ESTIMADA	39.85
-27/06/2025 06:00	ESTIMADA	39.85
-27/06/2025 07:00	ESTIMADA	39.85
-27/06/2025 08:00	ESTIMADA	94.40
-27/06/2025 09:00	ESTIMADA	103.60
-27/06/2025 10:00	ESTIMADA	103.60
-27/06/2025 11:00	ESTIMADA	103.60
-27/06/2025 12:00	ESTIMADA	103.60
-27/06/2025 13:00	ESTIMADA	103.60
-27/06/2025 14:00	ESTIMADA	94.40
-27/06/2025 15:00	ESTIMADA	94.40
-27/06/2025 16:00	ESTIMADA	94.40
-27/06/2025 17:00	ESTIMADA	94.40
-27/06/2025 18:00	ESTIMADA	103.60
-27/06/2025 19:00	ESTIMADA	103.60
-27/06/2025 20:00	ESTIMADA	103.60
-27/06/2025 21:00	ESTIMADA	103.60
-27/06/2025 22:00	ESTIMADA	94.40
-27/06/2025 23:00	ESTIMADA	94.40
-28/06/2025 00:00	ESTIMADA	39.85
-28/06/2025 01:00	ESTIMADA	39.85
-28/06/2025 02:00	ESTIMADA	39.85
-28/06/2025 03:00	ESTIMADA	39.85
-28/06/2025 04:00	ESTIMADA	39.85
-28/06/2025 05:00	ESTIMADA	39.85
-28/06/2025 06:00	ESTIMADA	39.85
-28/06/2025 07:00	ESTIMADA	39.85
-28/06/2025 08:00	ESTIMADA	39.85
-28/06/2025 09:00	ESTIMADA	39.85
-28/06/2025 10:00	ESTIMADA	39.85
-28/06/2025 11:00	ESTIMADA	39.85
-28/06/2025 12:00	ESTIMADA	39.85
-28/06/2025 13:00	ESTIMADA	39.85
-28/06/2025 14:00	ESTIMADA	39.85
-28/06/2025 15:00	ESTIMADA	39.85
-28/06/2025 16:00	ESTIMADA	39.85
-28/06/2025 17:00	ESTIMADA	39.85
-28/06/2025 18:00	ESTIMADA	39.85
-28/06/2025 19:00	ESTIMADA	39.85
-28/06/2025 20:00	ESTIMADA	39.85
-28/06/2025 21:00	ESTIMADA	39.85
-28/06/2025 22:00	ESTIMADA	39.85
-28/06/2025 23:00	ESTIMADA	39.85
-29/06/2025 00:00	ESTIMADA	39.85
-29/06/2025 01:00	ESTIMADA	39.85
-29/06/2025 02:00	ESTIMADA	39.85
-29/06/2025 03:00	ESTIMADA	39.85
-29/06/2025 04:00	ESTIMADA	39.85
-29/06/2025 05:00	ESTIMADA	39.85
-29/06/2025 06:00	ESTIMADA	39.85
-29/06/2025 07:00	ESTIMADA	39.85
-29/06/2025 08:00	ESTIMADA	39.85
-29/06/2025 09:00	ESTIMADA	39.85
-29/06/2025 10:00	ESTIMADA	39.85
-29/06/2025 11:00	ESTIMADA	39.85
-29/06/2025 12:00	ESTIMADA	39.85
-29/06/2025 13:00	ESTIMADA	39.85
-29/06/2025 14:00	ESTIMADA	39.85
-29/06/2025 15:00	ESTIMADA	39.85
-29/06/2025 16:00	ESTIMADA	39.85
-29/06/2025 17:00	ESTIMADA	39.85
-29/06/2025 18:00	ESTIMADA	39.85
-29/06/2025 19:00	ESTIMADA	39.85
-29/06/2025 20:00	ESTIMADA	39.85
-29/06/2025 21:00	ESTIMADA	39.85
-29/06/2025 22:00	ESTIMADA	39.85
-29/06/2025 23:00	ESTIMADA	39.85
-30/06/2025 00:00	ESTIMADA	39.85
-30/06/2025 01:00	ESTIMADA	39.85
-30/06/2025 02:00	ESTIMADA	39.85
-30/06/2025 03:00	ESTIMADA	39.85
-30/06/2025 04:00	ESTIMADA	39.85
-30/06/2025 05:00	ESTIMADA	39.85
-30/06/2025 06:00	ESTIMADA	39.85
-30/06/2025 07:00	ESTIMADA	39.85
-30/06/2025 08:00	ESTIMADA	94.40
-30/06/2025 09:00	ESTIMADA	103.60
-30/06/2025 10:00	ESTIMADA	103.60
-30/06/2025 11:00	ESTIMADA	103.60
-30/06/2025 12:00	ESTIMADA	103.60
-30/06/2025 13:00	ESTIMADA	103.60
-30/06/2025 14:00	ESTIMADA	94.40
-30/06/2025 15:00	ESTIMADA	94.40
-30/06/2025 16:00	ESTIMADA	94.40
-30/06/2025 17:00	ESTIMADA	94.40
-30/06/2025 18:00	ESTIMADA	103.60
-30/06/2025 19:00	ESTIMADA	103.60
-30/06/2025 20:00	ESTIMADA	103.60
-30/06/2025 21:00	ESTIMADA	103.60
-30/06/2025 22:00	ESTIMADA	94.40
-30/06/2025 23:00	ESTIMADA	94.40
-01/07/2025 00:00	REAL	44.00
-01/07/2025 01:00	REAL	42.00
-01/07/2025 02:00	REAL	41.00
-01/07/2025 03:00	REAL	41.00
-01/07/2025 04:00	REAL	41.00
-01/07/2025 05:00	REAL	41.00
-01/07/2025 06:00	REAL	87.00
-01/07/2025 07:00	REAL	149.00
-01/07/2025 08:00	REAL	164.00
-01/07/2025 09:00	REAL	176.00
-01/07/2025 10:00	REAL	177.00
-01/07/2025 11:00	REAL	181.00
-01/07/2025 12:00	REAL	174.00
-01/07/2025 13:00	REAL	174.00
-01/07/2025 14:00	REAL	163.00
-01/07/2025 15:00	REAL	148.00
-01/07/2025 16:00	REAL	154.00
-01/07/2025 17:00	REAL	152.00
-01/07/2025 18:00	REAL	125.00
-01/07/2025 19:00	REAL	100.00
-01/07/2025 20:00	REAL	58.00
-01/07/2025 21:00	REAL	53.00
-01/07/2025 22:00	REAL	48.00
-01/07/2025 23:00	REAL	48.00
-02/07/2025 00:00	REAL	49.00
-02/07/2025 01:00	REAL	48.00
-02/07/2025 02:00	REAL	46.00
-02/07/2025 03:00	REAL	45.00
-02/07/2025 04:00	REAL	45.00
-02/07/2025 05:00	REAL	44.00
-02/07/2025 06:00	REAL	121.00
-02/07/2025 07:00	REAL	133.00
-02/07/2025 08:00	REAL	145.00
-02/07/2025 09:00	REAL	148.00
-02/07/2025 10:00	REAL	154.00
-02/07/2025 11:00	REAL	149.00
-02/07/2025 12:00	REAL	157.00
-02/07/2025 13:00	REAL	159.00
-02/07/2025 14:00	REAL	157.00
-02/07/2025 15:00	REAL	135.00
-02/07/2025 16:00	REAL	137.00
-02/07/2025 17:00	REAL	138.00
-02/07/2025 18:00	REAL	114.00
-02/07/2025 19:00	REAL	93.00
-02/07/2025 20:00	REAL	51.00
-02/07/2025 21:00	REAL	46.00
-02/07/2025 22:00	REAL	44.00
-02/07/2025 23:00	REAL	44.00
-03/07/2025 00:00	REAL	43.00
-03/07/2025 01:00	REAL	42.00
-03/07/2025 02:00	REAL	41.00
-03/07/2025 03:00	REAL	42.00
-03/07/2025 04:00	REAL	40.00
-03/07/2025 05:00	REAL	41.00
-03/07/2025 06:00	REAL	112.00
-03/07/2025 07:00	REAL	135.00
-03/07/2025 08:00	REAL	153.00
-03/07/2025 09:00	REAL	164.00
-03/07/2025 10:00	REAL	168.00
-03/07/2025 11:00	REAL	168.00
-03/07/2025 12:00	REAL	177.00
-03/07/2025 13:00	REAL	173.00
-03/07/2025 14:00	REAL	173.00
-03/07/2025 15:00	REAL	146.00
-03/07/2025 16:00	REAL	145.00
-03/07/2025 17:00	REAL	144.00
-03/07/2025 18:00	REAL	118.00
-03/07/2025 19:00	REAL	82.00
-03/07/2025 20:00	REAL	45.00
-03/07/2025 21:00	REAL	40.00
-03/07/2025 22:00	REAL	39.00
-03/07/2025 23:00	REAL	37.00
-04/07/2025 00:00	REAL	38.00
-04/07/2025 01:00	REAL	37.00
-04/07/2025 02:00	REAL	38.00
-04/07/2025 03:00	REAL	37.00
-04/07/2025 04:00	REAL	37.00
-04/07/2025 05:00	REAL	37.00
-04/07/2025 06:00	REAL	35.00
-04/07/2025 07:00	REAL	116.00
-04/07/2025 08:00	REAL	145.00
-04/07/2025 09:00	REAL	156.00
-04/07/2025 10:00	REAL	161.00
-04/07/2025 11:00	REAL	160.00
-04/07/2025 12:00	REAL	163.00
-04/07/2025 13:00	REAL	160.00
-04/07/2025 14:00	REAL	154.00
-04/07/2025 15:00	REAL	93.00
-04/07/2025 16:00	REAL	77.00
-04/07/2025 17:00	REAL	77.00
-04/07/2025 18:00	REAL	70.00
-04/07/2025 19:00	REAL	68.00
-04/07/2025 20:00	REAL	57.00
-04/07/2025 21:00	REAL	49.00
-04/07/2025 22:00	REAL	47.00
-04/07/2025 23:00	REAL	49.00
-05/07/2025 00:00	REAL	48.00
-05/07/2025 01:00	REAL	48.00
-05/07/2025 02:00	REAL	47.00
-05/07/2025 03:00	REAL	48.00
-05/07/2025 04:00	REAL	46.00
-05/07/2025 05:00	REAL	46.00
-05/07/2025 06:00	REAL	46.00
-05/07/2025 07:00	REAL	47.00
-05/07/2025 08:00	REAL	49.00
-05/07/2025 09:00	REAL	53.00
-05/07/2025 10:00	REAL	52.00
-05/07/2025 11:00	REAL	51.00
-05/07/2025 12:00	REAL	52.00
-05/07/2025 13:00	REAL	51.00
-05/07/2025 14:00	REAL	53.00
-05/07/2025 15:00	REAL	51.00
-05/07/2025 16:00	REAL	51.00
-05/07/2025 17:00	REAL	52.00
-05/07/2025 18:00	REAL	50.00
-05/07/2025 19:00	REAL	50.00
-05/07/2025 20:00	REAL	47.00
-05/07/2025 21:00	REAL	49.00
-05/07/2025 22:00	REAL	48.00
-05/07/2025 23:00	REAL	47.00
-06/07/2025 00:00	REAL	47.00
-06/07/2025 01:00	REAL	48.00
-06/07/2025 02:00	REAL	47.00
-06/07/2025 03:00	REAL	47.00
-06/07/2025 04:00	REAL	46.00
-06/07/2025 05:00	REAL	45.00
-06/07/2025 06:00	REAL	45.00
-06/07/2025 07:00	REAL	45.00
-06/07/2025 08:00	REAL	46.00
-06/07/2025 09:00	REAL	49.00
-06/07/2025 10:00	REAL	50.00
-06/07/2025 11:00	REAL	49.00
-06/07/2025 12:00	REAL	50.00
-06/07/2025 13:00	REAL	50.00
-06/07/2025 14:00	REAL	49.00
-06/07/2025 15:00	REAL	47.00
-06/07/2025 16:00	REAL	50.00
-06/07/2025 17:00	REAL	52.00
-06/07/2025 18:00	REAL	51.00
-06/07/2025 19:00	REAL	49.00
-06/07/2025 20:00	REAL	48.00
-06/07/2025 21:00	REAL	46.00
-06/07/2025 22:00	REAL	46.00
-06/07/2025 23:00	REAL	44.00
-07/07/2025 00:00	REAL	45.00
-07/07/2025 01:00	REAL	44.00
-07/07/2025 02:00	REAL	43.00
-07/07/2025 03:00	REAL	43.00
-07/07/2025 04:00	REAL	43.00
-07/07/2025 05:00	REAL	44.00
-07/07/2025 06:00	REAL	116.00
-07/07/2025 07:00	REAL	128.00
-07/07/2025 08:00	REAL	135.00
-07/07/2025 09:00	REAL	143.00
-07/07/2025 10:00	REAL	144.00
-07/07/2025 11:00	REAL	148.00
-07/07/2025 12:00	REAL	148.00
-07/07/2025 13:00	REAL	143.00
-07/07/2025 14:00	REAL	142.00
-07/07/2025 15:00	REAL	127.00
-07/07/2025 16:00	REAL	136.00
-07/07/2025 17:00	REAL	136.00
-07/07/2025 18:00	REAL	110.00
-07/07/2025 19:00	REAL	83.00
-07/07/2025 20:00	REAL	50.00
-07/07/2025 21:00	REAL	41.00
-07/07/2025 22:00	REAL	39.00
-07/07/2025 23:00	REAL	41.00
-08/07/2025 00:00	REAL	40.00
-08/07/2025 01:00	REAL	38.00
-08/07/2025 02:00	REAL	38.00
-08/07/2025 03:00	REAL	40.00
-08/07/2025 04:00	REAL	37.00
-08/07/2025 05:00	REAL	38.00
-08/07/2025 06:00	REAL	106.00
-08/07/2025 07:00	REAL	115.00
-08/07/2025 08:00	REAL	125.00
-08/07/2025 09:00	REAL	134.00
-08/07/2025 10:00	REAL	140.00
-08/07/2025 11:00	REAL	135.00
-08/07/2025 12:00	REAL	143.00
-08/07/2025 13:00	REAL	148.00
-08/07/2025 14:00	REAL	145.00
-08/07/2025 15:00	REAL	134.00
-08/07/2025 16:00	REAL	136.00
-08/07/2025 17:00	REAL	131.00
-08/07/2025 18:00	REAL	107.00
-08/07/2025 19:00	REAL	82.00
-08/07/2025 20:00	REAL	48.00
-08/07/2025 21:00	REAL	41.00
-08/07/2025 22:00	REAL	40.00
-08/07/2025 23:00	REAL	40.00
-09/07/2025 00:00	REAL	38.00
-09/07/2025 01:00	REAL	35.00
-09/07/2025 02:00	REAL	35.00
-09/07/2025 03:00	REAL	35.00
-09/07/2025 04:00	REAL	36.00
-09/07/2025 05:00	REAL	36.00
-09/07/2025 06:00	REAL	104.00
-09/07/2025 07:00	REAL	118.00
-09/07/2025 08:00	REAL	138.00
-09/07/2025 09:00	REAL	147.00
-09/07/2025 10:00	REAL	145.00
-09/07/2025 11:00	REAL	143.00
-09/07/2025 12:00	REAL	144.00
-09/07/2025 13:00	REAL	157.00
-09/07/2025 14:00	REAL	151.00
-09/07/2025 15:00	REAL	134.00
-09/07/2025 16:00	REAL	131.00
-09/07/2025 17:00	REAL	131.00
-09/07/2025 18:00	REAL	107.00
-09/07/2025 19:00	REAL	88.00
-09/07/2025 20:00	REAL	50.00
-09/07/2025 21:00	REAL	42.00
-09/07/2025 22:00	REAL	39.00
-09/07/2025 23:00	REAL	38.00
-10/07/2025 00:00	REAL	37.00
-10/07/2025 01:00	REAL	36.00
-10/07/2025 02:00	REAL	38.00
-10/07/2025 03:00	REAL	37.00
-10/07/2025 04:00	REAL	37.00
-10/07/2025 05:00	REAL	39.00
-10/07/2025 06:00	REAL	102.00
-10/07/2025 07:00	REAL	115.00
-10/07/2025 08:00	REAL	130.00
-10/07/2025 09:00	REAL	143.00
-10/07/2025 10:00	REAL	140.00
-10/07/2025 11:00	REAL	140.00
-10/07/2025 12:00	REAL	139.00
-10/07/2025 13:00	REAL	141.00
-10/07/2025 14:00	REAL	140.00
-10/07/2025 15:00	REAL	121.00
-10/07/2025 16:00	REAL	127.00
-10/07/2025 17:00	REAL	127.00
-10/07/2025 18:00	REAL	99.00
-10/07/2025 19:00	REAL	80.00
-10/07/2025 20:00	REAL	47.00
-10/07/2025 21:00	REAL	39.00
-10/07/2025 22:00	REAL	37.00
-10/07/2025 23:00	REAL	38.00
-11/07/2025 00:00	REAL	38.00
-11/07/2025 01:00	REAL	38.00
-11/07/2025 02:00	REAL	36.00
-11/07/2025 03:00	REAL	37.00
-11/07/2025 04:00	REAL	37.00
-11/07/2025 05:00	REAL	37.00
-11/07/2025 06:00	REAL	84.00
-11/07/2025 07:00	REAL	122.00
-11/07/2025 08:00	REAL	137.00
-11/07/2025 09:00	REAL	150.00
-11/07/2025 10:00	REAL	144.00
-11/07/2025 11:00	REAL	139.00
-11/07/2025 12:00	REAL	140.00
-11/07/2025 13:00	REAL	137.00
-11/07/2025 14:00	REAL	139.00
-11/07/2025 15:00	REAL	82.00
-11/07/2025 16:00	REAL	72.00
-11/07/2025 17:00	REAL	67.00
-11/07/2025 18:00	REAL	65.00
-11/07/2025 19:00	REAL	61.00
-11/07/2025 20:00	REAL	53.00
-11/07/2025 21:00	REAL	46.00
-11/07/2025 22:00	REAL	44.00
-11/07/2025 23:00	REAL	44.00
-12/07/2025 00:00	REAL	42.00
-12/07/2025 01:00	REAL	42.00
-12/07/2025 02:00	REAL	41.00
-12/07/2025 03:00	REAL	44.00
-12/07/2025 04:00	REAL	41.00
-12/07/2025 05:00	REAL	41.00
-12/07/2025 06:00	REAL	41.00
-12/07/2025 07:00	REAL	40.00
-12/07/2025 08:00	REAL	44.00
-12/07/2025 09:00	REAL	44.00
-12/07/2025 10:00	REAL	45.00
-12/07/2025 11:00	REAL	49.00
-12/07/2025 12:00	REAL	49.00
-12/07/2025 13:00	REAL	48.00
-12/07/2025 14:00	REAL	44.00
-12/07/2025 15:00	REAL	41.00
-12/07/2025 16:00	REAL	39.00
-12/07/2025 17:00	REAL	40.00
-12/07/2025 18:00	REAL	39.00
-12/07/2025 19:00	REAL	40.00
-12/07/2025 20:00	REAL	40.00
-12/07/2025 21:00	REAL	39.00
-12/07/2025 22:00	REAL	39.00
-12/07/2025 23:00	REAL	41.00
-13/07/2025 00:00	REAL	38.00
-13/07/2025 01:00	REAL	39.00
-13/07/2025 02:00	REAL	38.00
-13/07/2025 03:00	REAL	38.00
-13/07/2025 04:00	REAL	37.00
-13/07/2025 05:00	REAL	38.00
-13/07/2025 06:00	REAL	37.00
-13/07/2025 07:00	REAL	38.00
-13/07/2025 08:00	REAL	39.00
-13/07/2025 09:00	REAL	40.00
-13/07/2025 10:00	REAL	41.00
-13/07/2025 11:00	REAL	44.00
-13/07/2025 12:00	REAL	45.00
-13/07/2025 13:00	REAL	45.00
-13/07/2025 14:00	REAL	47.00
-13/07/2025 15:00	REAL	47.00
-13/07/2025 16:00	REAL	49.00
-13/07/2025 17:00	REAL	49.00
-13/07/2025 18:00	REAL	50.00
-13/07/2025 19:00	REAL	46.00
-13/07/2025 20:00	REAL	45.00
-13/07/2025 21:00	REAL	43.00
-13/07/2025 22:00	REAL	42.00
-13/07/2025 23:00	REAL	40.00
-14/07/2025 00:00	REAL	42.00
-14/07/2025 01:00	REAL	40.00
-14/07/2025 02:00	REAL	39.00
-14/07/2025 03:00	REAL	40.00
-14/07/2025 04:00	REAL	40.00
-14/07/2025 05:00	REAL	40.00
-14/07/2025 06:00	REAL	103.00
-14/07/2025 07:00	REAL	120.00
-14/07/2025 08:00	REAL	130.00
-14/07/2025 09:00	REAL	138.00
-14/07/2025 10:00	REAL	143.00
-14/07/2025 11:00	REAL	149.00
-14/07/2025 12:00	REAL	152.00
-14/07/2025 13:00	REAL	147.00
-14/07/2025 14:00	REAL	147.00
-14/07/2025 15:00	REAL	123.00
-14/07/2025 16:00	REAL	120.00
-14/07/2025 17:00	REAL	122.00
-14/07/2025 18:00	REAL	95.00
-14/07/2025 19:00	REAL	79.00
-14/07/2025 20:00	REAL	50.00
-14/07/2025 21:00	REAL	43.00
-14/07/2025 22:00	REAL	39.00
-14/07/2025 23:00	REAL	38.00
-15/07/2025 00:00	REAL	38.00
-15/07/2025 01:00	REAL	38.00
-15/07/2025 02:00	REAL	38.00
-15/07/2025 03:00	REAL	37.00
-15/07/2025 04:00	REAL	37.00
-15/07/2025 05:00	REAL	37.00
-15/07/2025 06:00	REAL	103.00
-15/07/2025 07:00	REAL	119.00
-15/07/2025 08:00	REAL	132.00
-15/07/2025 09:00	REAL	144.00
-15/07/2025 10:00	REAL	145.00
-15/07/2025 11:00	REAL	151.00
-15/07/2025 12:00	REAL	156.00
-15/07/2025 13:00	REAL	156.00
-15/07/2025 14:00	REAL	157.00
-15/07/2025 15:00	REAL	135.00
-15/07/2025 16:00	REAL	143.00
-15/07/2025 17:00	REAL	139.00
-15/07/2025 18:00	REAL	107.00
-15/07/2025 19:00	REAL	88.00
-15/07/2025 20:00	REAL	53.00
-15/07/2025 21:00	REAL	44.00
-15/07/2025 22:00	REAL	42.00
-15/07/2025 23:00	REAL	43.00
-16/07/2025 00:00	REAL	42.00
-16/07/2025 01:00	REAL	40.00
-16/07/2025 02:00	REAL	40.00
-16/07/2025 03:00	REAL	40.00
-16/07/2025 04:00	REAL	41.00
-16/07/2025 05:00	REAL	39.00
-16/07/2025 06:00	REAL	98.00
-16/07/2025 07:00	REAL	112.00
-16/07/2025 08:00	REAL	128.00
-16/07/2025 09:00	REAL	144.00
-16/07/2025 10:00	REAL	145.00
-16/07/2025 11:00	REAL	152.00
-16/07/2025 12:00	REAL	157.00
-16/07/2025 13:00	REAL	157.00
-16/07/2025 14:00	REAL	147.00
-16/07/2025 15:00	REAL	133.00
-16/07/2025 16:00	REAL	138.00
-16/07/2025 17:00	REAL	145.00
-16/07/2025 18:00	REAL	107.00
-16/07/2025 19:00	REAL	86.00
-16/07/2025 20:00	REAL	55.00
-16/07/2025 21:00	REAL	46.00
-16/07/2025 22:00	REAL	44.00
-16/07/2025 23:00	REAL	43.00
-17/07/2025 00:00	REAL	44.00
-17/07/2025 01:00	REAL	41.00
-17/07/2025 02:00	REAL	41.00
-17/07/2025 03:00	REAL	41.00
-17/07/2025 04:00	REAL	40.00
-17/07/2025 05:00	REAL	42.00
-17/07/2025 06:00	REAL	105.00
-17/07/2025 07:00	REAL	124.00
-17/07/2025 08:00	REAL	149.00
-17/07/2025 09:00	REAL	162.00
-17/07/2025 10:00	REAL	170.00
-17/07/2025 11:00	REAL	180.00
-17/07/2025 12:00	REAL	177.00
-17/07/2025 13:00	REAL	173.00
-17/07/2025 14:00	REAL	172.00
-17/07/2025 15:00	REAL	138.00
-17/07/2025 16:00	REAL	141.00
-17/07/2025 17:00	REAL	141.00
-17/07/2025 18:00	REAL	109.00
-17/07/2025 19:00	REAL	86.00
-17/07/2025 20:00	REAL	43.00
-17/07/2025 21:00	REAL	36.00
-17/07/2025 22:00	REAL	35.00
-17/07/2025 23:00	REAL	34.00
-18/07/2025 00:00	REAL	34.00
-18/07/2025 01:00	REAL	34.00
-18/07/2025 02:00	REAL	35.00
-18/07/2025 03:00	REAL	35.00
-18/07/2025 04:00	REAL	34.00
-18/07/2025 05:00	REAL	35.00
-18/07/2025 06:00	REAL	108.00
-18/07/2025 07:00	REAL	120.00
-18/07/2025 08:00	REAL	138.00
-18/07/2025 09:00	REAL	145.00
-18/07/2025 10:00	REAL	148.00
-18/07/2025 11:00	REAL	157.00
-18/07/2025 12:00	REAL	161.00
-18/07/2025 13:00	REAL	158.00
-18/07/2025 14:00	REAL	158.00
-18/07/2025 15:00	REAL	91.00
-18/07/2025 16:00	REAL	72.00
-18/07/2025 17:00	REAL	74.00
-18/07/2025 18:00	REAL	67.00
-18/07/2025 19:00	REAL	56.00
-18/07/2025 20:00	REAL	41.00
-18/07/2025 21:00	REAL	34.00
-18/07/2025 22:00	REAL	35.00
-18/07/2025 23:00	REAL	33.00
-19/07/2025 00:00	REAL	34.00
-19/07/2025 01:00	REAL	33.00
-19/07/2025 02:00	REAL	34.00
-19/07/2025 03:00	REAL	34.00
-19/07/2025 04:00	REAL	34.00
-19/07/2025 05:00	REAL	32.00
-19/07/2025 06:00	REAL	33.00
-19/07/2025 07:00	REAL	32.00
-19/07/2025 08:00	REAL	33.00
-19/07/2025 09:00	REAL	36.00
-19/07/2025 10:00	REAL	36.00
-19/07/2025 11:00	REAL	39.00
-19/07/2025 12:00	REAL	36.00
-19/07/2025 13:00	REAL	39.00
-19/07/2025 14:00	REAL	37.00
-19/07/2025 15:00	REAL	38.00
-19/07/2025 16:00	REAL	37.00
-19/07/2025 17:00	REAL	35.00
-19/07/2025 18:00	REAL	36.00
-19/07/2025 19:00	REAL	33.00
-19/07/2025 20:00	REAL	33.00
-19/07/2025 21:00	REAL	34.00
-19/07/2025 22:00	REAL	31.00
-19/07/2025 23:00	REAL	33.00
-20/07/2025 00:00	REAL	33.00
-20/07/2025 01:00	REAL	32.00
-20/07/2025 02:00	REAL	31.00
-20/07/2025 03:00	REAL	32.00
-20/07/2025 04:00	REAL	33.00
-20/07/2025 05:00	REAL	31.00
-20/07/2025 06:00	REAL	32.00
-20/07/2025 07:00	REAL	32.00
-20/07/2025 08:00	REAL	32.00
-20/07/2025 09:00	REAL	32.00
-20/07/2025 10:00	REAL	35.00
-20/07/2025 11:00	REAL	34.00
-20/07/2025 12:00	REAL	36.00
-20/07/2025 13:00	REAL	36.00
-20/07/2025 14:00	REAL	37.00
-20/07/2025 15:00	REAL	35.00
-20/07/2025 16:00	REAL	38.00
-20/07/2025 17:00	REAL	35.00
-20/07/2025 18:00	REAL	37.00
-20/07/2025 19:00	REAL	35.00
-20/07/2025 20:00	REAL	35.00
-20/07/2025 21:00	REAL	33.00
-20/07/2025 22:00	REAL	32.00
-20/07/2025 23:00	REAL	32.00
-21/07/2025 00:00	REAL	32.00
-21/07/2025 01:00	REAL	33.00
-21/07/2025 02:00	REAL	32.00
-21/07/2025 03:00	REAL	32.00
-21/07/2025 04:00	REAL	34.00
-21/07/2025 05:00	REAL	31.00
-21/07/2025 06:00	REAL	125.00
-21/07/2025 07:00	REAL	131.00
-21/07/2025 08:00	REAL	129.00
-21/07/2025 09:00	REAL	138.00
-21/07/2025 10:00	REAL	138.00
-21/07/2025 11:00	REAL	141.00
-21/07/2025 12:00	REAL	142.00
-21/07/2025 13:00	REAL	139.00
-21/07/2025 14:00	REAL	136.00
-21/07/2025 15:00	REAL	118.00
-21/07/2025 16:00	REAL	116.00
-21/07/2025 17:00	REAL	109.00
-21/07/2025 18:00	REAL	84.00
-21/07/2025 19:00	REAL	68.00
-21/07/2025 20:00	REAL	36.00
-21/07/2025 21:00	REAL	31.00
-21/07/2025 22:00	REAL	31.00
-21/07/2025 23:00	REAL	29.00
-22/07/2025 00:00	REAL	30.00
-22/07/2025 01:00	REAL	29.00
-22/07/2025 02:00	REAL	29.00
-22/07/2025 03:00	REAL	29.00
-22/07/2025 04:00	REAL	28.00
-22/07/2025 05:00	REAL	29.00
-22/07/2025 06:00	REAL	100.00
-22/07/2025 07:00	REAL	106.00
-22/07/2025 08:00	REAL	118.00
-22/07/2025 09:00	REAL	138.00
-22/07/2025 10:00	REAL	135.00
-22/07/2025 11:00	REAL	135.00
-22/07/2025 12:00	REAL	129.00
-22/07/2025 13:00	REAL	130.00
-22/07/2025 14:00	REAL	126.00
-22/07/2025 15:00	REAL	115.00
-22/07/2025 16:00	REAL	123.00
-22/07/2025 17:00	REAL	122.00
-22/07/2025 18:00	REAL	91.00
-22/07/2025 19:00	REAL	71.00
-22/07/2025 20:00	REAL	38.00
-22/07/2025 21:00	REAL	33.00
-22/07/2025 22:00	REAL	33.00
-22/07/2025 23:00	REAL	32.00
-23/07/2025 00:00	REAL	32.00
-23/07/2025 01:00	REAL	32.00
-23/07/2025 02:00	REAL	31.00
-23/07/2025 03:00	REAL	31.00
-23/07/2025 04:00	REAL	31.00
-23/07/2025 05:00	REAL	32.00
-23/07/2025 06:00	REAL	110.00
-23/07/2025 07:00	REAL	123.00
-23/07/2025 08:00	REAL	125.00
-23/07/2025 09:00	REAL	137.00
-23/07/2025 10:00	REAL	134.00
-23/07/2025 11:00	REAL	136.00
-23/07/2025 12:00	REAL	144.00
-23/07/2025 13:00	REAL	145.00
-23/07/2025 14:00	REAL	125.00
-23/07/2025 15:00	REAL	103.00
-23/07/2025 16:00	REAL	106.00
-23/07/2025 17:00	REAL	106.00
-23/07/2025 18:00	REAL	76.00
-23/07/2025 19:00	REAL	56.00
-23/07/2025 20:00	REAL	33.00
-23/07/2025 21:00	REAL	28.00
-23/07/2025 22:00	REAL	27.00
-23/07/2025 23:00	REAL	26.00
-24/07/2025 00:00	REAL	27.00
-24/07/2025 01:00	REAL	26.00
-24/07/2025 02:00	REAL	26.00
-24/07/2025 03:00	REAL	26.00
-24/07/2025 04:00	REAL	25.00
-24/07/2025 05:00	REAL	26.00
-24/07/2025 06:00	REAL	93.00
-24/07/2025 07:00	REAL	105.00
-24/07/2025 08:00	REAL	113.00
-24/07/2025 09:00	REAL	123.00
-24/07/2025 10:00	REAL	120.00
-24/07/2025 11:00	REAL	120.00
-24/07/2025 12:00	REAL	121.00
-24/07/2025 13:00	REAL	120.00
-24/07/2025 14:00	REAL	117.00
-24/07/2025 15:00	REAL	95.00
-24/07/2025 16:00	REAL	92.00
-24/07/2025 17:00	REAL	95.00
-24/07/2025 18:00	REAL	75.00
-24/07/2025 19:00	REAL	61.00
-24/07/2025 20:00	REAL	33.00
-24/07/2025 21:00	REAL	26.00
-24/07/2025 22:00	REAL	26.00
-24/07/2025 23:00	REAL	26.00
-25/07/2025 00:00	REAL	26.00
-25/07/2025 01:00	REAL	25.00
-25/07/2025 02:00	REAL	26.00
-25/07/2025 03:00	REAL	26.00
-25/07/2025 04:00	REAL	25.00
-25/07/2025 05:00	REAL	26.00
-25/07/2025 06:00	REAL	88.00
-25/07/2025 07:00	REAL	98.00
-25/07/2025 08:00	REAL	108.00
-25/07/2025 09:00	REAL	118.00
-25/07/2025 10:00	REAL	118.00
-25/07/2025 11:00	REAL	120.00
-25/07/2025 12:00	REAL	123.00
-25/07/2025 13:00	REAL	121.00
-25/07/2025 14:00	REAL	119.00
-25/07/2025 15:00	REAL	67.00
-25/07/2025 16:00	REAL	52.00
-25/07/2025 17:00	REAL	47.00
-25/07/2025 18:00	REAL	41.00
-25/07/2025 19:00	REAL	37.00
-25/07/2025 20:00	REAL	32.00
-25/07/2025 21:00	REAL	27.00
-25/07/2025 22:00	REAL	26.00
-25/07/2025 23:00	REAL	26.00
-26/07/2025 00:00	REAL	26.00
-26/07/2025 01:00	REAL	26.00
-26/07/2025 02:00	REAL	25.00
-26/07/2025 03:00	REAL	26.00
-26/07/2025 04:00	REAL	25.00
-26/07/2025 05:00	REAL	26.00
-26/07/2025 06:00	REAL	25.00
-26/07/2025 07:00	REAL	25.00
-26/07/2025 08:00	REAL	27.00
-26/07/2025 09:00	REAL	25.00
-26/07/2025 10:00	REAL	28.00
-26/07/2025 11:00	REAL	27.00
-26/07/2025 12:00	REAL	28.00
-26/07/2025 13:00	REAL	28.00
-26/07/2025 14:00	REAL	28.00
-26/07/2025 15:00	REAL	28.00
-26/07/2025 16:00	REAL	28.00
-26/07/2025 17:00	REAL	29.00
-26/07/2025 18:00	REAL	27.00
-26/07/2025 19:00	REAL	27.00
-26/07/2025 20:00	REAL	26.00
-26/07/2025 21:00	REAL	26.00
-26/07/2025 22:00	REAL	27.00
-26/07/2025 23:00	REAL	26.00
-27/07/2025 00:00	REAL	26.00
-27/07/2025 01:00	REAL	26.00
-27/07/2025 02:00	REAL	25.00
-27/07/2025 03:00	REAL	26.00
-27/07/2025 04:00	REAL	25.00
-27/07/2025 05:00	REAL	26.00
-27/07/2025 06:00	REAL	25.00
-27/07/2025 07:00	REAL	26.00
-27/07/2025 08:00	REAL	26.00
-27/07/2025 09:00	REAL	27.00
-27/07/2025 10:00	REAL	27.00
-27/07/2025 11:00	REAL	29.00
-27/07/2025 12:00	REAL	28.00
-27/07/2025 13:00	REAL	28.00
-27/07/2025 14:00	REAL	28.00
-27/07/2025 15:00	REAL	28.00
-27/07/2025 16:00	REAL	29.00
-27/07/2025 17:00	REAL	29.00
-27/07/2025 18:00	REAL	27.00
-27/07/2025 19:00	REAL	29.00
-27/07/2025 20:00	REAL	27.00
-27/07/2025 21:00	REAL	28.00
-27/07/2025 22:00	REAL	26.00
-27/07/2025 23:00	REAL	27.00"""
+# --- DATA SIMULATION ---
+# Simulating a 24-hour profile based on the Oasis Project pilot (Via Augusta, 36)
+hours = np.arange(24)
 
-# Data parsing
-lines = raw_data_string.strip().split('\n')
-parsed_data = []
-for line in lines[1:]:
-    parts = re.split(r'\t+', line)
-    if len(parts) == 3:
-        parsed_data.append({
-            'Datetime': parts[0],
-            'Energy (kW)': float(parts[2])
-        })
+# Synthetic baseline components (in kW)
+base_load = np.full(24, 30.0)
+lighting_load = np.array([5, 5, 5, 5, 5, 10, 30, 40, 45, 45, 45, 45, 45, 40, 40, 35, 30, 20, 15, 10, 5, 5, 5, 5])
+ventilation_load = np.array([5, 5, 5, 5, 5, 10, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 10, 5, 5, 5, 5, 5, 5])
+hvac_load = np.array([0, 0, 0, 0, 0, 20, 60, 80, 90, 100, 110, 110, 100, 90, 80, 60, 40, 20, 10, 0, 0, 0, 0, 0])
 
-df = pd.DataFrame(parsed_data)
-df['Datetime'] = pd.to_datetime(df['Datetime'], format='%d/%m/%Y %H:%M')
-df['Hour'] = df['Datetime'].dt.hour
-df['Date'] = df['Datetime'].dt.date
+total_baseline_kw = base_load + lighting_load + ventilation_load + hvac_load
 
-# --- DATA PROCESSING & OPTIMIZATION ---
-base_night_load_kw = 40.0 
+# Apply Flexibility (Oasis Optimization)
+# For this simulation, we heavily target the P1 hours (10:00 - 14:00) for maximum reduction
+optimized_hvac = np.where((hours >= 10) & (hours <= 14), hvac_load * (1 - hvac_reduction), hvac_load)
+optimized_vent = np.where((hours >= 10) & (hours <= 14), ventilation_load * (1 - vent_reduction), ventilation_load)
+optimized_light = np.where((hours >= 10) & (hours <= 14), lighting_load * (1 - light_reduction), lighting_load)
 
-def optimize_load(row):
-    h = row['Hour']
-    kw = row['Energy (kW)']
-    if 8 <= h <= 18:
-        active_load = max(0, kw - base_night_load_kw)
-        optimized_kw = base_night_load_kw + (active_load * (1 - daytime_reduction))
-        return optimized_kw
-    return kw
+# Simulating the P6 (Night) Pre-cooling "charge" (increasing load slightly at night)
+optimized_hvac = np.where((hours >= 2) & (hours <= 6), optimized_hvac + 15, optimized_hvac)
 
-df['Optimized_Energy (kW)'] = df.apply(optimize_load, axis=1)
+total_optimized_kw = base_load + optimized_light + optimized_vent + optimized_hvac
 
-# Pre-cool logic: Shift 30% of what was saved into the P6 window (02:00 - 06:00)
-for d in df['Date'].unique():
-    day_data = df[df['Date'] == d]
-    daily_saved = (day_data['Energy (kW)'] - day_data['Optimized_Energy (kW)']).sum()
-    if daily_saved > 0:
-        shift_amount_per_hour = (daily_saved * 0.30) / 5.0 
-        mask = (df['Date'] == d) & (df['Hour'] >= 2) & (df['Hour'] <= 6)
-        df.loc[mask, 'Optimized_Energy (kW)'] += shift_amount_per_hour
-
-# Find Peak Day to drive the 24-hour charts
-peak_date = df.loc[df['Energy (kW)'].idxmax(), 'Date']
-df_peak_day = df[df['Date'] == peak_date]
-
-total_baseline_kw = df_peak_day['Energy (kW)'].values
-total_optimized_kw = df_peak_day['Optimized_Energy (kW)'].values
-hours = df_peak_day['Hour'].values
-
-# Calculate Peak Day Cost
+# Tariff mapping (Simplified 3.0TD: P6=0-8h, P1=10-14h, Int=Rest)
 def get_price(h):
     if 0 <= h < 8: return price_p6
     elif 10 <= h <= 14: return price_p1
@@ -833,56 +63,58 @@ optimized_cost = np.sum(total_optimized_kw * prices)
 # --- PANDAPOWER GRID SIMULATION ---
 def run_grid_simulation(load_profile_kw):
     net = pp.create_empty_network()
+    
+    # Create buses
     b_ext = pp.create_bus(net, vn_kv=20., name="External Grid Bus")
     b_lv = pp.create_bus(net, vn_kv=0.4, name="Building LV Bus")
+    
+    # Create external grid
     pp.create_ext_grid(net, bus=b_ext)
     
+    # Create transformer based on user input (250 kVA)
+    # Using standard parameters, adjusting sn_mva
     pp.create_transformer_from_parameters(net, hv_bus=b_ext, lv_bus=b_lv, sn_mva=transformer_capacity_kva/1000.0, 
                                           vn_hv_kv=20., vn_lv_kv=0.4, vkr_percent=1.0, vk_percent=4.0, 
                                           pfe_kw=1.0, i0_percent=0.1, name="Gracia Local Trafo")
     
-    load_idx = pp.create_load(net, bus=b_lv, p_mw=0, q_mvar=0, name="Building")
+    # Create load (placeholder to be updated in the loop)
+    load_idx = pp.create_load(net, bus=b_lv, p_mw=0, q_mvar=0, name="Via Augusta 36")
+    
     trafo_loading = []
     
     for p_kw in load_profile_kw:
+        # Update load (assuming 0.95 power factor)
         p_mw = p_kw / 1000.0
         q_mvar = p_mw * np.tan(np.arccos(0.95))
         net.load.at[load_idx, 'p_mw'] = p_mw
         net.load.at[load_idx, 'q_mvar'] = q_mvar
         
+        # Run power flow
         try:
             pp.runpp(net)
             loading_percent = net.res_trafo.loading_percent.iloc[0]
         except:
-            # Analytical fail-safe if solver fails
-            s_mva = (p_mw / 0.95)
-            loading_percent = (s_mva / (transformer_capacity_kva / 1000.0)) * 100
+            loading_percent = 100.0 # Default to max if non-convergent
             
         trafo_loading.append(loading_percent)
+        
     return trafo_loading
 
 baseline_trafo_loading = run_grid_simulation(total_baseline_kw)
 optimized_trafo_loading = run_grid_simulation(total_optimized_kw)
 
-# Count violations overall in the month
-baseline_violations = len(df[df['Energy (kW)'] > contracted_power_kw])
-optimized_violations = len(df[df['Optimized_Energy (kW)'] > contracted_power_kw])
+# Count violations
+base_violations = sum(1 for load in baseline_trafo_loading if load > 100)
+opt_violations = sum(1 for load in optimized_trafo_loading if load > 100)
 
 # --- DASHBOARD RENDER ---
-st.header(f"1. Overall KPI Analysis (Based on July 2025)")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Max Peak Demand", f"{df['Optimized_Energy (kW)'].max():.1f} kW", f"{df['Optimized_Energy (kW)'].max() - df['Energy (kW)'].max():.1f} kW", delta_color="inverse")
-col2.metric("Total Monthly Energy Savings", f"{(df['Energy (kW)'].sum() - df['Optimized_Energy (kW)'].sum()):.0f} kWh", f"-{((df['Energy (kW)'].sum() - df['Optimized_Energy (kW)'].sum()) / df['Energy (kW)'].sum()) * 100:.1f}%")
-col3.metric(f"Violations (> {contracted_power_kw} kW)", f"{optimized_violations}", f"{optimized_violations - baseline_violations} instances", delta_color="inverse")
-daily_savings = df.groupby('Date').apply(lambda x: (x['Energy (kW)'] - x['Optimized_Energy (kW)']).sum())
-col4.metric("Virtual Battery Deployed", f"{daily_savings.max():.1f} kWh", "Max Daily Load Shift")
+col1.metric("Max Peak (Baseline)", f"{max(total_baseline_kw):.1f} kW")
+col2.metric("Max Peak (Optimized)", f"{max(total_optimized_kw):.1f} kW", f"{max(total_optimized_kw)-max(total_baseline_kw):.1f} kW")
+col3.metric("Daily Cost (Baseline)", f"€{baseline_cost:.2f}")
+col4.metric("Daily Cost (Optimized)", f"€{optimized_cost:.2f}", f"€{optimized_cost-baseline_cost:.2f}")
 
 st.markdown("---")
-
-st.header(f"2. Peak Day Deep-Dive ({peak_date.strftime('%d/%m/%Y')})")
-col_a, col_b = st.columns(2)
-col_a.metric("Daily Cost (Baseline)", f"€{baseline_cost:.2f}")
-col_b.metric("Daily Cost (Optimized)", f"€{optimized_cost:.2f}", f"€{optimized_cost-baseline_cost:.2f}")
 
 # Chart 1: Load Profile Comparison
 st.subheader("📈 Load Profile: Static vs. Grid-Interactive (GEB)")
@@ -890,16 +122,16 @@ fig_load = go.Figure()
 fig_load.add_trace(go.Scatter(x=hours, y=total_baseline_kw, mode='lines', name='Baseline Load', line=dict(color='red', dash='dash')))
 fig_load.add_trace(go.Scatter(x=hours, y=total_optimized_kw, mode='lines', name='Optimized Load (Oasis)', fill='tozeroy', line=dict(color='green')))
 fig_load.add_shape(type="rect", x0=10, y0=0, x1=14, y1=max(total_baseline_kw)+20, fillcolor="orange", opacity=0.2, layer="below", line_width=0)
-fig_load.add_annotation(x=12, y=max(total_baseline_kw)+10, text="High Cost Tariff (P1: 10:00-14:00)", showarrow=False)
+fig_load.add_annotation(x=12, y=max(total_baseline_kw)+10, text="High Cost Tariff (P1)", showarrow=False)
 
 fig_load.update_layout(xaxis_title="Hour of Day", yaxis_title="Power Demand (kW)", height=400, margin=dict(l=0, r=0, t=30, b=0))
 st.plotly_chart(fig_load, use_container_width=True)
 
 # Chart 2: Transformer Stress Validation
-st.subheader(f"🔋 Transformer Thermal Stress ({transformer_capacity_kva} kVA Limit)")
-col_c, col_d = st.columns([3, 1])
+st.subheader("🔋 Transformer Thermal Stress (250 kVA Limit)")
+col_a, col_b = st.columns([3, 1])
 
-with col_c:
+with col_a:
     fig_trafo = go.Figure()
     fig_trafo.add_trace(go.Bar(x=hours, y=baseline_trafo_loading, name="Baseline Loading %", marker_color='indianred'))
     fig_trafo.add_trace(go.Bar(x=hours, y=optimized_trafo_loading, name="Optimized Loading %", marker_color='lightseagreen'))
@@ -907,13 +139,11 @@ with col_c:
     fig_trafo.update_layout(barmode='group', xaxis_title="Hour of Day", yaxis_title="Transformer Loading (%)", height=400, margin=dict(l=0, r=0, t=30, b=0))
     st.plotly_chart(fig_trafo, use_container_width=True)
 
-with col_d:
-    st.markdown("### Daily Peak Violations")
-    base_day_violations = sum(1 for load in baseline_trafo_loading if load > 100)
-    opt_day_violations = sum(1 for load in optimized_trafo_loading if load > 100)
-    st.metric("Violations (Baseline)", base_day_violations)
-    st.metric("Violations (Optimized)", opt_day_violations, delta=opt_day_violations-base_day_violations, delta_color="inverse")
+with col_b:
+    st.markdown("### Peak Violations")
+    st.metric("Violations (Baseline)", base_violations)
+    st.metric("Violations (Optimized)", opt_violations, delta=opt_violations-base_violations, delta_color="inverse")
     
     st.markdown("""
-    **Analysis:** By utilizing Grey-Box load shifting (pre-cooling during P6 and daytime load shedding), we actively curtail the localized grid stress on the distribution transformer precisely when demand is at its peak.
+    **Analysis:** By applying Grey-Box load shifting (pre-cooling during P6 and shedding during P1), we actively reduce the localized thermal stress on the 250 kVA distribution transformer.
     """)
